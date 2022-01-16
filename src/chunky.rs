@@ -1,8 +1,8 @@
-use std::io::{self, Cursor, Read, Seek, SeekFrom, Error, ErrorKind};
-use byteorder::{ReadBytesExt, LittleEndian};
+use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
-#[derive(Default,Serialize)]
-pub struct Game { 
+#[derive(Default, Serialize)]
+pub struct Game {
     pub name: String,
     pub mode: String,
     pub resources: String,
@@ -10,9 +10,11 @@ pub struct Game {
     pub victory_points: u32,
 }
 #[derive(Serialize)]
-pub struct Data { pub duration: u32 }
-#[derive(Default,Serialize)]
-pub struct Map { 
+pub struct Data {
+    pub duration: u32,
+}
+#[derive(Default, Serialize)]
+pub struct Map {
     pub name: String,
     pub description: String,
     pub abbrname: String,
@@ -22,7 +24,7 @@ pub struct Map {
     pub width: u32,
     pub height: u32,
 }
-#[derive(Default,Serialize)]
+#[derive(Default, Serialize)]
 pub struct Player {
     pub name: String,
     pub kind: u32,
@@ -44,11 +46,13 @@ pub enum Chunk {
     Map(Map),
     Player(Player),
     FoldInfo { size: u32 },
-    Empty {}
+    Empty {},
 }
 
 impl Default for Chunk {
-    fn default() -> Chunk { Chunk::Empty {}}
+    fn default() -> Chunk {
+        Chunk::Empty {}
+    }
 }
 
 pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
@@ -73,9 +77,12 @@ pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         "FOLDINFO" => Ok(Chunk::FoldInfo { size: chunk_size }),
         "FOLDPOST" | "FOLDGPLY" => Ok(Chunk::Empty {}),
         _ => {
-            let msg = format!("invalid chunk \"{}\" at position {}",
-                              chunk_name, cursor.position());
-            return Err(Error::new(ErrorKind::InvalidData, msg))
+            let msg = format!(
+                "invalid chunk \"{}\" at position {}",
+                chunk_name,
+                cursor.position()
+            );
+            return Err(Error::new(ErrorKind::InvalidData, msg));
         }
     }?;
 
@@ -84,18 +91,18 @@ pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
 
 fn parse_data(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     Ok(Chunk::Data(Data {
-        duration: cursor.read_u32::<LittleEndian>()?
+        duration: cursor.read_u32::<LittleEndian>()?,
     }))
 }
 
 fn parse_sdsc(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(4))?;
-    let date = read_vstring_utf16(&mut cursor); 
+    let date = read_vstring_utf16(&mut cursor);
     cursor.seek(SeekFrom::Current(8))?;
     let path = read_vstring(&mut cursor);
-    let name = read_vstring_utf16(&mut cursor); 
-    let abbrname = read_vstring_utf16(&mut cursor); 
-    let description = read_vstring_utf16(&mut cursor); 
+    let name = read_vstring_utf16(&mut cursor);
+    let abbrname = read_vstring_utf16(&mut cursor);
+    let description = read_vstring_utf16(&mut cursor);
     let maxplayers = cursor.read_u32::<LittleEndian>().unwrap();
     let width = cursor.read_u32::<LittleEndian>().unwrap();
     let height = cursor.read_u32::<LittleEndian>().unwrap();
@@ -132,12 +139,12 @@ fn parse_base(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
             "TSSR" if val != 0 => resources = "High".to_owned(),
             "COLS" if val == 0 => locations = "Random".to_owned(),
             "COLS" if val != 0 => locations = "Fixed".to_owned(),
-            _ => ()
+            _ => (),
         };
     }
 
     cursor.seek(SeekFrom::Current(1))?;
-    let name = read_vstring_utf16(&mut cursor); 
+    let name = read_vstring_utf16(&mut cursor);
     cursor.seek(SeekFrom::Current(4))?;
     let nconds = cursor.read_u32::<LittleEndian>()?;
     for _ in 0..nconds {
@@ -188,7 +195,7 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         hero: hero,
         skin_path: skin_path,
         skin_name: skin_name,
-        id: id
+        id: id,
     }))
 }
 
@@ -197,7 +204,7 @@ pub fn read_vstring(cursor: &mut Cursor<Vec<u8>>) -> String {
     let mut buf = vec![0; nchars as usize];
 
     if let Err(_) = cursor.read_exact(&mut buf) {
-        return "".to_string()
+        return "".to_string();
     }
 
     String::from_utf8(buf).unwrap_or("".to_string())

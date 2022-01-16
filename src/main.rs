@@ -19,14 +19,14 @@ use chunky::Chunk;
 use chunky::Data as DataChunk;
 use chunky::Player as PlayerChunk;
 
+mod action;
+use action::*;
+
 const TICK_ACTION: u32 = 0;
 const TICK_CHATMSG: u32 = 1;
 
-#[derive(Serialize)]
-pub struct Action {
-    tick: u32,
-    data: Vec<u8>,
-}
+
+
 #[derive(Serialize)]
 pub struct Message {
     tick: u32,
@@ -48,6 +48,7 @@ pub struct ReplayInfo {
     players: Vec<Chunk>,
     observers: Vec<Chunk>,
     messages: Vec<Message>,
+    actions: Vec<ActionTick>
 }
 
 fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
@@ -158,7 +159,10 @@ fn parse_ticks(mut cursor: &mut Cursor<Vec<u8>>,
             TICK_ACTION  => {
                 let action = parse_action(&mut cursor)?;
                 if action.tick > 0 { current_tick = action.tick }
-                md5.input(action.data.as_slice());
+                //md5.input(action.data.as_slice());
+                if action.actions.len() > 0 {
+                    replay.actions.push(action);
+                }
             }
             TICK_CHATMSG => {
                 let msg = parse_message(&mut cursor, current_tick)?;
@@ -174,21 +178,61 @@ fn parse_ticks(mut cursor: &mut Cursor<Vec<u8>>,
     Ok(())
 }
 
-fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<Action, io::Error> {
+/// Reads the data from an action tick
+///
+/// * DWORD [4 bytes] = Identifies this as an Action Tick
+/// * DWORD [4 bytes] = Length in bytes of the remainder of this action tick
+/// * ------- This is where the cursor starts from in this function -------
+/// * BYTE [1 byte] = Always the same
+/// * DWORD [4 bytes] = The number of the current tick. Starts with 1
+/// * DWORD [4 bytes] = Another counter, but does not go up with every tick. Seems somehow related to the chainging of action tick lengths. Start with 0.
+/// * DWORD [4 bytes] = Unknown. Varies with every action tick.
+/// * DWORD [4 bytes] = The amount of player actions bundles in this tick.
+///
+fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<ActionTick, io::Error> {
+    // Always the same
     cursor.seek(SeekFrom::Current(1))?;
+    
+    // The number of the current tick
     let tick = cursor.read_u32::<LittleEndian>()?;
+    
+    // Skip reading another counter and the unknown field...
     cursor.seek(SeekFrom::Current(8))?;
-    let mut actions = Vec::new();
+    
+    let mut action_bundle = vec![];
+    
+    // ...and continue with the amount player actions bundles in this tick
     let nactions = cursor.read_u32::<LittleEndian>()?;
+    
     for _ in 0..nactions {
+        // let mut actions = Vec::new();
+        // Player Action Bundle Shared Header
+        // We don't know what the next to DWORDs contain, so we skip them
         cursor.seek(SeekFrom::Current(8))?;
+        
+        // The remaining size of the action bundle + 1
         let mut bytes_remain = cursor.read_u32::<LittleEndian>()?;
+        // Header End
+
         while bytes_remain > 0 {
+            // Total length of player actions in bytes.
+            // DO NOT USE THIS VALUE AS THE REMAINING LENGTH (it is limited to 1 byte).
             cursor.seek(SeekFrom::Current(1))?;
+            
+            // Length of the next action block in bytes included this byte
             let action_size = cursor.read_u8()?;
+            
             let mut buf = vec![0; (action_size-2) as usize];
             cursor.read_exact(&mut buf)?;
-            actions.append(&mut buf);
+
+            let mut action = Action::default();
+            action.append_data(&mut buf);
+            action.set_size(action_size);
+
+            // Get action type
+            action.set_action_type();
+            action_bundle.push(action);
+
             bytes_remain -= action_size as u32;
         }
         cursor.seek(SeekFrom::Current(1))?;
@@ -196,9 +240,10 @@ fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<Action, io::Error> {
 
     // println!("tick: {}, actions: {:?}", tick, actions);
 
-    Ok(Action {
+    Ok(ActionTick {
         tick: tick,
-        data: actions,
+        number_of_actions: nactions,
+        actions: action_bundle,
     })
 }
 
@@ -237,6 +282,11 @@ fn main() {
         };
         let json = serde_json::to_string_pretty(&replay).unwrap();
         println!("{}", json);
+        // for action_tick in replay.actions.iter() {
+        //     for action in &action_tick.actions {
+        //         println!("{}", action);
+        //     }
+        // }
 
     } else {
         println!("must supply a file");
