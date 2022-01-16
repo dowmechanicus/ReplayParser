@@ -1,5 +1,5 @@
 use crate::{
-    actions::{Action, ActionType},
+    actions::{Action},
     chunky::Chunk,
     message::Message,
 };

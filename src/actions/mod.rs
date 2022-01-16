@@ -1,13 +1,13 @@
 use serde::{ser::SerializeStruct, Serialize};
 use std::{fmt};
 
-use self::{
-    building::BuildingAction, global::GlobalAction, unit::UnitAction, unknown::UnknownAction,
-};
+use self::{building::BuildingAction, global::GlobalAction, purchase_unit::PurchaseUnitAction, purchase_wargear::PurchaseWargearAction, unit::UnitAction, unknown::UnknownAction};
 
 pub mod building;
 pub mod global;
 pub mod unit;
+pub mod purchase_unit;
+pub mod purchase_wargear;
 pub mod unknown;
 
 pub trait ParseAction: fmt::Debug {}
@@ -20,7 +20,7 @@ pub struct Action {
     pub action_id: u8,
     pub name: String,
     pub player_id: u8,
-    pub source: String,
+    pub source: u8,
     pub data: Vec<u8>,
     pub context: (u8, u8),
     pub details: ActionType,
@@ -37,7 +37,7 @@ impl<'a> From<ActionData<'a>> for Action {
             action_id: data[1],
             name: action_name,
             player_id: data[3] - 0xE8,
-            source: format!("{:#X}", data[7]),
+            source: data[7],
             data: data.clone(),
             context: get_action_context(data).unwrap_or((0, 0)),
             details: action_type,
@@ -56,7 +56,7 @@ impl Serialize for Action {
         state.serialize_field("action_id", &self.action_id)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("player_id", &self.player_id)?;
-        state.serialize_field("source", &self.source)?;
+        state.serialize_field("source", format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str())?;
         state.serialize_field("data", serde_json::to_string(&self.data).unwrap().as_str())?;
         state.serialize_field(
             "context",
@@ -67,11 +67,22 @@ impl Serialize for Action {
     }
 }
 
+impl Action {
+    fn get_source_name(&self) -> String {
+        match self.source {
+            0 => "Placeable Building".to_string(),
+            16 => "Building".to_string(),
+            32 => "Unit".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ActionType {
     AbilityOnPlaceable(BuildingAction),
-    BuildUnit(UnitAction),
+    BuildUnit(PurchaseUnitAction),
     CancelUnitOrWargear(UnitAction),
     SetRallyPoint(BuildingAction),
     UpgradeBuilding(BuildingAction),
@@ -80,7 +91,7 @@ pub enum ActionType {
     CapturePoint(UnitAction),
     UpgradeUnit(UnitAction),
     ReinforceUnit(UnitAction),
-    PurchaseWargear(UnitAction),
+    PurchaseWargear(PurchaseWargearAction),
     CancelWargearPurchase(UnitAction),
     AttackMove(UnitAction),
     AbilityOnUnit(UnitAction),
@@ -108,7 +119,7 @@ impl<'a> From<ActionData<'a>> for ActionType {
         let (data, _) = action_data;
         match data[1] {
             2 => ActionType::AbilityOnPlaceable(BuildingAction::from(action_data)),
-            3 => ActionType::BuildUnit(UnitAction::from(action_data)),
+            3 => ActionType::BuildUnit(PurchaseUnitAction::from(action_data)),
             5 => ActionType::CancelUnitOrWargear(UnitAction::from(action_data)),
             9 => ActionType::Unknown(UnknownAction::from(action_data)), // source: 0x10
             11 => ActionType::SetRallyPoint(BuildingAction::from(action_data)),
@@ -119,7 +130,7 @@ impl<'a> From<ActionData<'a>> for ActionType {
             47 => ActionType::CapturePoint(UnitAction::from(action_data)),
             48 => ActionType::UpgradeUnit(UnitAction::from(action_data)),
             49 => ActionType::ReinforceUnit(UnitAction::from(action_data)),
-            50 => ActionType::PurchaseWargear(UnitAction::from(action_data)),
+            50 => ActionType::PurchaseWargear(PurchaseWargearAction::from(action_data)),
             51 => ActionType::CancelWargearPurchase(UnitAction::from(action_data)),
             52 => ActionType::AttackMove(UnitAction::from(action_data)),
             53 => ActionType::AbilityOnUnit(UnitAction::from(action_data)),

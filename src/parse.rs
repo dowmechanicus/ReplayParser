@@ -144,7 +144,7 @@ pub fn parse_ticks(
                             ActionType::UpgradeUnit(..) => replay.actions.push(action),
                             ActionType::PurchaseWargear(..) => replay.actions.push(action),
                             ActionType::CancelWargearPurchase(..) => replay.actions.push(action),
-                            _ => replay.actions.push(action),
+                            _ => (),
                         };
                     }
                 }

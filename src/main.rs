@@ -9,7 +9,6 @@ extern crate serde_derive;
 extern crate crypto;
 
 mod chunky;
-mod identifiers;
 mod message;
 mod parse;
 mod replay;
