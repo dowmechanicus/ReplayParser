@@ -8,16 +8,13 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate crypto;
 
-
-
 mod chunky;
-mod action;
 mod identifiers;
-mod replay;
 mod message;
 mod parse;
+mod replay;
 use parse::*;
-
+mod actions;
 
 fn main() {
     if let Some(arg) = env::args().nth(1) {
@@ -29,11 +26,8 @@ fn main() {
                 std::process::exit(1);
             }
         };
-        // let json = serde_json::to_string_pretty(&replay).unwrap();
-        // println!("{}", json);
-        for action in replay.actions {
-            println!("{:?}", action);
-        }
+        let json = serde_json::to_string_pretty(&replay).unwrap();
+        println!("{}", json);
     } else {
         println!("must supply a file");
     }
