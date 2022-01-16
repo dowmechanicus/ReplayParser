@@ -1,4 +1,5 @@
 use std::fmt;
+use byteorder::{self, ReadBytesExt, LittleEndian, BigEndian};
 
 use identifiers::*;
 
@@ -17,8 +18,13 @@ impl fmt::Debug for Action {
             .field("Type", &format!("{} ({})", get_action_type_by_id(self.action_type).to_string(), self.data[1]))
             .field("Ownership ID (?)", &self.data[2])
             .field("Player", &self.data[3])
-            .field("Unknown", &self.data[4])
-            .field("Action count", &format!("({},{})", &self.data[5], &self.data[6]));
+            .field("Unknown", &self.data[4]);
+
+        {
+            let mut current = &self.data[5..=6];
+            let v = current.read_u16::<LittleEndian>().unwrap();
+            ds.field("Action count", &format!("{:?}", v + 1));
+        }
             
         match self.data[7] {
             0x0 => {
@@ -78,6 +84,8 @@ The action data block has the following format:
 6-7  BYTE  2  A counter for the actions performed by this player. (confirmed)
               Starts at 0. This means there is a limit of 65536.
 
+              Best read as u16 LittleEndian
+
 8  BYTE  1    0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)
               0x20 = unit upgrades, movement
               0x0  = seems related to power nodes and placeable entities (Turret, Mines)
@@ -93,7 +101,8 @@ The action data block has the following format:
 10  BYTE  1   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.
               Is this the player location/ID?
 
-              Values that have been observed so far [u8]: 3, 74, 195
+              Values that have been observed so far [u8] in 1v1: 3, 74, 195
+              Values that have been observed so far [u8] additionally: 122
 
 11-12 BYTE  2 Most likely the unit identifier. But how/where is it assigned?
               When building power nodes and generators this has been observed to be (232, 15)
