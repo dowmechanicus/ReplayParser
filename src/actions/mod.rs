@@ -27,7 +27,7 @@ pub struct Action {
     pub source: u8,
     pub data: Vec<u8>,
     pub context: (u8, u8),
-    pub meta: Vec<u32>,
+    pub meta: Vec<u8>,
     pub details: ActionType,
 }
 

@@ -139,9 +139,11 @@ pub fn parse_ticks(
                     for mut action in actions {
                         // Retrieve the players name from the players vector and
                         // associate it with the action.
-                        if let Chunk::Player(player) = &replay.players[action.player_id as usize] {
-                            action.player_name = player.name.to_string();
-                        };
+                        if (action.player_id as usize) < replay.players.len() {
+                            if let Chunk::Player(player) = &replay.players[action.player_id as usize] {
+                                action.player_name = player.name.to_string();
+                            };
+                        }
 
                         match &action.details {
                             ActionType::BuildUnit(..) => replay.actions.push(action),
@@ -187,8 +189,14 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
 
     // Reading another counter and the unknown field...
     let meta = vec![
-        cursor.read_u32::<LittleEndian>()?,
-        cursor.read_u32::<LittleEndian>()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
+        cursor.read_u8()?,
     ];
 
     let mut action_bundle = vec![];
