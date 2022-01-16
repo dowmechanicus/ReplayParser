@@ -8,8 +8,8 @@ Nr.  | TYPE  | LENGTH  | Description
 4|  BYTE|  1|    Player ID (confirmed)
 5|  BYTE|  1|    Unknown<br>Values that have been observed so far [u8]: 3
 6-7|  BYTE|  2|  A counter for the actions performed by this player. (confirmed)<br> Starts at 0. This means there is a limit of 65536.<br> Best read as u16 LittleEndian
-8|  BYTE|  1| 0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)<br> 0x20 = unit upgrades, movement<br> 0x0  = seems related to power nodes and placeable entities (Turret, Mines)<br>(seems like any action performed by HQ like building or setting rally point is 10 while every action performed by a unit is 20<br>Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20)
-9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0
+8|  BYTE|  1| 0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)<br> 0x20 = unit upgrades, movement<br>0x42 = was spotted with action code 56<br>0x44 = was spotted with action code 56<br>0x0  = seems related to power nodes and placeable entities (Turret, Mines)<br>(seems like any action performed by HQ like building or setting rally point is 10 while every action performed by a unit is 20<br>Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20), 66 (0x42), 68 (0x44)
+9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 93
 10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.<br> Is this the player location/ID?<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 195<br>Values that have been observed so far [u8] additionally: 122
 11-12| BYTE|  2| Most likely the unit identifier. But how/where is it assigned?<br>When building power nodes and generators this has been observed to be (232, 15)
 13-14| BYTE|  2| Always the same? It seems so.<br>When building a power node this has been observed to be (35, 107)<br> When building a generator this has been observed to be (35, 98)

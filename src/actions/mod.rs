@@ -45,8 +45,10 @@ impl<'a> From<ActionData<'a>> for ActionType {
             2 => ActionType::AbilityOnPlaceable(BuildingAction::from(action_data)),
             3 => ActionType::BuildUnit(UnitAction::from(action_data)),
             5 => ActionType::CancelUnitOrWargear(UnitAction::from(action_data)),
+            9 => ActionType::Unknown(UnknownAction::from(action_data)), // source: 0x10
             11 => ActionType::SetRallyPoint(BuildingAction::from(action_data)),
             15 => ActionType::UpgradeBuilding(BuildingAction::from(action_data)),
+            23 => ActionType::Unknown(UnknownAction::from(action_data)), // might be call-in from global as its source is 0x10
             43 => ActionType::StopMove(UnitAction::from(action_data)),
             44 => ActionType::Move(UnitAction::from(action_data)),
             47 => ActionType::CapturePoint(UnitAction::from(action_data)),
@@ -56,12 +58,17 @@ impl<'a> From<ActionData<'a>> for ActionType {
             51 => ActionType::CancelWargearPurchase(UnitAction::from(action_data)),
             52 => ActionType::AttackMove(UnitAction::from(action_data)),
             53 => ActionType::AbilityOnUnit(UnitAction::from(action_data)),
+            56 => ActionType::Unknown(UnknownAction::from(action_data)), // sources: 0x20, 0x43 - can be invoked rapidly in succession - unit related
+            58 => ActionType::Unknown(UnknownAction::from(action_data)), // source: 0x20
             61 => ActionType::Retreat(UnitAction::from(action_data)),
             70 => ActionType::ForceMelee(UnitAction::from(action_data)),
             71 => ActionType::ToggleStance(UnitAction::from(action_data)),
             78 => ActionType::PlaceBuilding(BuildingAction::from(action_data)),
+            85 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
             89 => ActionType::Unknown(UnknownAction::from(action_data)),
-            94 => ActionType::Unknown(UnknownAction::from(action_data)),
+            94 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
+            96 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
+            98 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
             _ => ActionType::Unknown(UnknownAction::from(action_data)),
         }
     }
