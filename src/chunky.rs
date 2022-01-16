@@ -34,6 +34,10 @@ pub struct Player {
     pub rank: u32,
     pub cpu: u32,
     pub hero: u32,
+    pub primary_color: u8,
+    pub secondary_color: u8,
+    pub trim_color: u8,
+    pub accessory_color: u8,
     pub skin_path: String,
     pub skin_name: String,
     pub id: u8,
@@ -171,12 +175,33 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let race = read_vstring(&mut cursor);
     let relic_id = cursor.read_u64::<LittleEndian>()?;
     let rank = cursor.read_u32::<LittleEndian>()?;
+    
+    // These seem to be empty -> 0
     cursor.seek(SeekFrom::Current(4))?;
+
     let cpu = cursor.read_u32::<LittleEndian>()?;
     let hero = cursor.read_u32::<LittleEndian>()?;
-    cursor.seek(SeekFrom::Current(10))?;
-    let skin_path = read_vstring(&mut cursor);
+    
+    cursor.seek(SeekFrom::Current(1))?;
+    
+    // Rank again
     cursor.seek(SeekFrom::Current(4))?;
+    // Primary
+    let primary_color = cursor.read_u8()?;
+    // Secondary
+    let secondary_color = cursor.read_u8()?;
+    // Trim
+    let trim_color = cursor.read_u8()?;
+    // Accessory
+    let accessory_color = cursor.read_u8()?;
+    
+    cursor.seek(SeekFrom::Current(1))?;
+    
+    let skin_path = read_vstring(&mut cursor);
+    
+    // These seem to be empty. Probably padding for the strings.
+    cursor.seek(SeekFrom::Current(4))?;
+
     let skin_name = read_vstring_utf16(&mut cursor);
     let id = cursor.read_u8()?;
     let tmp = cursor.read_u8()?;
@@ -193,6 +218,10 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         rank: rank,
         cpu: cpu,
         hero: hero,
+        primary_color,
+        secondary_color,
+        trim_color,
+        accessory_color,
         skin_path: skin_path,
         skin_name: skin_name,
         id: id,
