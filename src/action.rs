@@ -12,57 +12,97 @@ pub struct Action {
 
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Action")
-            .field("Type", &get_action_type_by_id(self.action_type).to_string())
-            .field("Data", &self.data)
-            .finish()
+        let mut ds = f.debug_struct("Action");
+        ds
+            .field("Type", &format!("{} ({})", get_action_type_by_id(self.action_type).to_string(), self.data[1]))
+            .field("Ownership ID (?)", &self.data[2])
+            .field("Player", &self.data[3])
+            .field("Unknown", &self.data[4])
+            .field("Action count", &format!("({},{})", &self.data[5], &self.data[6]));
+            
+        match self.data[7] {
+            0x0 => {
+                ds.field("Action source", &"Placeable".to_string());
+            },
+            0x10 => {
+                ds.field("Action source", &"Building".to_string());
+            },
+            0x20 => {
+                ds.field("Action source", &"Unit".to_string());
+            },
+            _ => {
+                ds.field("Action source", &"Unknown".to_string());
+            },
+        }
+
+        ds.field("Data", &serde_json::to_string(&self.data[7..]).unwrap());
+        
+        match self.data[1] {
+            3 => {
+                ds.field("Unit Purchased", &format!("{}", &get_unit_by_item_id(self.data[13])));
+            },
+            47..=53 => {
+                ds.field("Unit", &format!("{}", &get_unit_by_item_id(self.data[13])));
+            } ,
+            _ => (),
+        }
+
+
+        ds.finish()
     }
 }
 
 /*
 The action data block has the following format:
-TYPE  LENGTH  Description
+#  TYPE  LENGTH  Description
 --------------------------
-BYTE  1       Unknown. Is always 0 though.
+1  BYTE  1    Unknown. Is always 0 though.
 
-BYTE  1       Action Type (confirmed)
+2  BYTE  1    Action Type (confirmed)
 
-BYTE  1       Not sure. It seems half an id and half an action identifier. By building generators the higher
+3  BYTE  1    Not sure. It seems half an id and half an action identifier. By building generators the higher
               4 bit are 0x8 lower 4 bit: 1 means this action is executed by player with ID 1, does not always
               correspond to the order of players in the header. I think this might be the position of the player base.
               So with fixed positioning this corresponds to the player ID, that's why that only works in fixed
               games.
-              Values that have been observed so far [u8]: 0, 1, 129
 
-BYTE  1       Player ID (confirmed)
+              Observation on lower bits: Seem to indicate player base location.
 
-BYTE  1       Unknown
+              Values that have been observed so far [u8]: 0, 1, 128, 129
+
+4  BYTE  1    Player ID (confirmed)
+
+5  BYTE  1    Unknown
               Values that have been observed so far [u8]: 3
 
-BYTE  2       A counter for the actions performed by this player. (confirmed)
+6-7  BYTE  2  A counter for the actions performed by this player. (confirmed)
               Starts at 0. This means there is a limit of 65536.
 
-BYTE  1       0x10 = build units
+8  BYTE  1    0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)
               0x20 = unit upgrades, movement
+              0x0  = seems related to power nodes and placeable entities (Turret, Mines)
               (seems like any action performed by HQ like building or setting rally point is 10 while every action
               performed by a unit is 20
 
-              Values that have been observed so far [u8] (hex): 16 (0x10), 32 (0x20)
+              Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20)
 
-BYTE  1       Unknown
+9  BYTE  1    Unknown
 
               Values that have been observed so far [u8]: 0
 
-BYTE  1       Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.
+10  BYTE  1   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.
               Is this the player location/ID?
 
-              Values that have been observed so far [u8]: 74, 195
+              Values that have been observed so far [u8]: 3, 74, 195
 
-BYTE  2       Most likely the unit identifier. But how/where is it assigned?
+11-12 BYTE  2 Most likely the unit identifier. But how/where is it assigned?
+              When building power nodes and generators this has been observed to be (232, 15)
 
-BYTE  2       Always the same? It seems so.
+13-14 BYTE  2 Always the same? It seems so.
+              When building a power node this has been observed to be (35, 107)
+              When building a generator this has been observed to be (35, 98)
 
-DWORD 4       Identifier for the item (unit, upgrade, wargear)
+15-19 DWORD 4 Identifier for the item (unit, upgrade, wargear)
               See the item codes file for these values
 
               Identifier for the canceled unit, upgrade, wargear
@@ -100,6 +140,6 @@ impl Action {
 
   - Targettable abilities seem to also have location information stored in them (probably origin and target coordinates)
 
-  - Action id 47 seems related to adding unit members or transforming a unit ASM -> ASM + Sergeant or FC -> TFC
+  - Unit id once unit it is on the field is not the same as the unit/item id when its purchased at the HQ
 
 */

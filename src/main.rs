@@ -239,11 +239,11 @@ fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<Vec<Action>, io::Error> 
             // For now we only want unit purchases, upgrades or cancellations thereof
             // Same goes for wargears and tier upgrades
             // Maybe for later: APM could be derived from the total number of actions
-            if let 3 | 5 | 15 | 47 | 50 | 51 = action.action_type {
+            // if let 3 | 5 | 15 | 47 | 50 | 51 = action.action_type {
                 action_bundle.push(action);
-            } else {
-                ();
-            }
+            // } else {
+                // ();
+            // }
 
             bytes_remain -= action_size as u32;
         }
@@ -285,8 +285,11 @@ fn main() {
                 std::process::exit(1);
             }
         };
-        let json = serde_json::to_string_pretty(&replay).unwrap();
-        println!("{}", json);
+        // let json = serde_json::to_string_pretty(&replay).unwrap();
+        // println!("{}", json);
+        for action in replay.actions {
+            println!("{:?}", action);
+        }
     } else {
         println!("must supply a file");
     }

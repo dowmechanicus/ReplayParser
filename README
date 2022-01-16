@@ -1,0 +1,121 @@
+Currently tried out action sequences:
+
+A-Move FC
+[{"data":[0,52,1,233,3,1,0,32,0,195,82,1,13,2,184,243,133,66,0,0,200,66,192,218,198],"size":27,"action_type":"unknown action"}]
+
+A-Move Scouts
+[{"data":[0,52,1,233,3,3,0,32,0,195,83,1,13,2,50,88,159,66,2,0,200,66,22,90,159],"size":27,"action_type":"unknown action"}]
+
+Move FC
+[{"data":[0,44,129,233,3,4,0,32,0,195,82,1,13,2,120,93,117,66,0,0,200,66,213,144,184],"size":27,"action_type":"move action"}]
+
+Move Scouts
+[{"data":[0,44,1,233,3,5,0,32,0,195,83,1,13,2,182,216,143,66,6,0,200,66,10,253,148],"size":27,"action_type":"move action"}]
+
+Tacs activate Kraken Rounds
+[{"data":[0,53,1,233,3,6,0,32,0,195,85,25,5,164,3,0,0],"size":19,"action_type":"ability"}]
+
+Scouts purchase shotguns
+[{"data":[0,50,1,233,3,0,0,32,0,195,83,5,4,218,1,0],"size":18,"action_type":"unknown action"}]
+
+Scouts purchase sergeant
+[{"data":[0,50,1,233,3,1,0,32,0,195,83,5,4,217,1,0],"size":18,"action_type":"unknown action"}]
+
+Scouts purchase elite training
+[{"data":[0,50,1,233,3,2,0,32,0,195,83,5,4,216,1,0],"size":18,"action_type":"unknown action"}]
+
+FC purchase power sword
+[{"data":[0,50,1,233,3,3,0,32,0,195,82,5,4,252,1,0],"size":18,"action_type":"unknown action"}]
+
+FC purchase alacrity armor
+[{"data":[0,50,1,233,3,4,0,32,0,195,82,5,4,240,1,0],"size":18,"action_type":"unknown action"}]
+
+FC purchase halo
+[{"data":[0,50,1,233,3,5,0,32,0,195,82,5,4,231,1,0],"size":18,"action_type":"unknown action"}]
+
+SM go T2
+[{"data":[0,15,1,233,3,6,0,16,0,74,111,5,4,186,1,0],"size":18,"action_type":"Wargear and Tier upgrade"}]
+
+Scouts cloaking
+[{"data":[0,53,1,233,3,7,0,32,0,195,83,25,5,143,3,0,0],"size":19,"action_type":"ability"}]
+
+Scouts uncloaking
+[{"data":[0,53,1,233,3,8,0,32,0,195,83,25,5,143,3,0,0],"size":19,"action_type":"ability"}]
+
+Scouts throw grenade
+[{"data":[0,53,1,233,3,9,0,32,0,195,83,26,19,144,3,0,0,1,0,2,59,226,160,66,0,0,200,66,120,215,161],"size":33,"action_type":"ability"}]
+
+FC battlecry
+[{"data":[0,53,1,233,3,10,0,32,0,195,82,25,5,107,3,0,0],"size":19,"action_type":"ability"}]
+
+FC alacrity
+[{"data":[0,53,1,233,3,11,0,32,0,195,82,25,5,110,3,0,0],"size":19,"action_type":"ability"}]
+
+FC toggle on halo
+[{"data":[0,53,1,233,3,12,0,32,0,195,82,25,5,109,3,0,0],"size":19,"action_type":"ability"}]
+
+FC toggle off halo
+[{"data":[0,53,1,233,3,13,0,32,0,195,82,25,5,109,3,0,0],"size":19,"action_type":"ability"}]
+
+###################################################################################################################
+
+Capture Power Node with Techmarine
+Action { Type: "Upgrade unit", Player: 232, Data: [0, 47, 0, 232, 3, 0, 0, 32, 0, 195, 80, 1, 5, 3, 7, 43, 0] }
+
+Capture Power Node with Scouts
+Action { Type: "Upgrade unit", Player: 232, Data: [0, 47, 0, 232, 3, 2, 0, 32, 0, 195, 81, 1, 5, 3, 7, 43, 0] }
+
+Capture Ressource Node with Scouts
+Action { Type: "Upgrade unit", Player: 232, Data: [0, 47, 0, 232, 3, 3, 0, 32, 0, 195, 81, 1, 5, 3, 31, 39, 0] }
+
+Build Power Node + 3 Generators
+Action { Type: "Build Power Node", Player: 232, Data: [0, 78, 0, 232, 3, 1, 0, 0, 0, 3, 232, 15, 35, 107, 2, 0, 0, 238, 167, 152, 194, 0, 0, 200, 66, 35, 122, 15, 65, 238, 167, 150, 194, 0, 0, 200, 66, 35, 122, 15, 65, 0, 7, 43, 0, 0, 0] }
+Action { Type: "Build Power Node", Player: 232, Data: [0, 78, 128, 232, 3, 2, 0, 0, 0, 3, 232, 15, 35, 98, 2, 0, 0, 0, 0, 169, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 0, 167, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 116, 74, 0, 0, 0] }
+Action { Type: "Build Power Node", Player: 232, Data: [0, 78, 128, 232, 3, 3, 0, 0, 0, 3, 232, 15, 35, 98, 2, 0, 0, 0, 0, 169, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 0, 167, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 116, 74, 0, 0, 0] }
+Action { Type: "Build Power Node", Player: 232, Data: [0, 78, 128, 232, 3, 4, 0, 0, 0, 3, 232, 15, 35, 98, 2, 0, 0, 0, 0, 169, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 0, 167, 194, 0, 0, 200, 66, 0, 0, 8, 65, 0, 116, 74, 0, 0, 0] }
+
+###################################################################################################################
+
+Retreat with Scouts
+Action { Type: "Unknown", Player: 232, Data: [0, 61, 0, 232, 3, 1, 0, 32, 0, 195, 81] }
+
+Upgrade ASM to Vanguards Veteran Squad
+Action { Type: "Purchase wargear", Player: 232, Data: [0, 50, 0, 232, 3, 4, 0, 32, 0, 195, 85, 5, 4, 227, 1, 0] }
+
+Upgrade Force Commander to Terminator Force Commander
+Action { Type: "Purchase wargear (50)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(2,0)", Data: "[32,0,195,80,5,4,241,1,0]" }
+
+##################################################################################################################
+
+Build Turret with Techmarine
+Action { Type: "Build Power Node", Player: 233, Data: [0, 78, 1, 233, 3, 0, 0, 0, 0, 3, 233, 15, 35, 102, 2, 0, 0, 213, 104, 165, 66, 0, 0, 200, 66, 168, 87, 199, 194, 10, 200, 158, 66, 0, 0, 200, 66, 85, 158, 197, 194, 0, 0, 0, 0, 0, 82] }
+
+Plant Mine with Techmarine
+Action { Type: "Build Power Node", Player: 233, Data: [0, 78, 1, 233, 3, 3, 0, 0, 0, 3, 233, 15, 35, 47, 1, 0, 0, 91, 18, 149, 66, 0, 0, 200, 66, 23, 143, 190, 194, 91, 18, 149, 66, 0, 0, 200, 66, 23, 143, 188, 194, 0, 0, 0, 0, 0, 82] }
+
+Go T2 as Space Marines
+Action { Type: "Tier upgrade", Player: 233, Data: [0, 15, 1, 233, 3, 1, 0, 16, 0, 74, 111, 5, 4, 186, 1, 0] }
+
+Upgrade Turret to Missile Turret
+Action { Type: "Tier upgrade", Player: 233, Data: [0, 15, 1, 233, 3, 4, 0, 16, 0, 74, 119, 5, 4, 225, 1, 0] }
+
+#################################################################################################################
+
+Build Catas, move LG, move GM, move Catas, move LG, move GM, Catas
+Action { Type: "Build unit (3)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(0,0)", Data: "[16,0,74,113,5,4,191,0,0]", Unit Purchased: "Catachan Devils" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(1,0)", Data: "[32,0,195,82,1,13,2,51,195,130,66,0,0,200,66,77,40,178]" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(2,0)", Data: "[32,0,195,83,1,13,2,161,220,147,66,2,0,200,66,69,169,142]" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(3,0)", Data: "[32,0,195,84,1,13,2,252,44,185,66,130,20,200,66,26,123,131]" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(4,0)", Data: "[32,0,195,82,1,13,2,48,213,155,66,0,0,200,66,190,138,199]" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(5,0)", Data: "[32,0,195,83,1,5,3,113,74,0]" }
+Action { Type: "Move action (44)", Ownership ID (?): 1, Player: 233, Unknown: 3, Action count: "(6,0)", Data: "[32,0,195,84,1,13,2,46,140,218,66,0,0,200,66,2,111,143]" }
+
+New replay file after this. Notice that the unit_id is not the same as in the file above. Catas were 84 above but are now 86 since a Heavy Weapon Squad was purchase before Catas.
+
+Build HWT, Build Catas, move LG, move GM, move HWT, move Catas
+Action { Type: "Build unit (3)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(0,0)", Data: "[16,0,74,101,5,4,193,0,0]", Unit Purchased: "unknown unit" }
+Action { Type: "Build unit (3)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(1,0)", Data: "[16,0,74,101,5,4,191,0,0]", Unit Purchased: "Catachan Devils" }
+Action { Type: "Move action (44)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(2,0)", Data: "[32,0,195,80,1,13,2,60,224,152,194,0,0,200,66,139,251,172]" }
+Action { Type: "Move action (44)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(3,0)", Data: "[32,0,195,81,1,13,2,246,103,158,194,0,0,200,66,186,235,157]" }
+Action { Type: "Move action (44)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(4,0)", Data: "[32,0,195,85,1,13,2,218,5,161,194,0,0,200,66,1,240,147]" }
+Action { Type: "Move action (44)", Ownership ID (?): 0, Player: 232, Unknown: 3, Action count: "(5,0)", Data: "[32,0,195,86,1,13,2,228,174,163,194,23,0,200,66,235,184,139]" }

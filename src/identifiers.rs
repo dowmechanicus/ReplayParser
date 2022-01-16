@@ -1,6 +1,12 @@
-pub fn get_unit_by_id(id: u8) -> &'static str {
+pub struct UnitDetails {
+    pub name: &'static str,
+    pub id: u8,
+}
+
+pub fn get_unit_by_item_id(id: u8) -> &'static str {
     match id {
         191 => "Catachan Devils",
+        193 => "Heavy Weapons Squad",
         219 => "Scouts",
         221 => "Tactical Marines",
         216 => "Devastator Squad",
@@ -19,9 +25,9 @@ pub fn get_unit_by_id(id: u8) -> &'static str {
 pub fn get_wargear_by_id(id: u8) -> &'static str {
     match id {
         197 => "Assault Marine Sergeant",
-        218 => "Scout - Shotguns",
-        217 => "Scout - Sergeant",
         216 => "Scout - Elite training",
+        217 => "Scout - Sergeant",
+        218 => "Scout - Shotguns",
         227 => "Vanguard Veteran Squad",
         231 => "Force Commander - Iron Halo",
         240 => "Force Commander - Alacrity armor",
@@ -33,29 +39,24 @@ pub fn get_wargear_by_id(id: u8) -> &'static str {
 
 pub fn get_action_type_by_id(id: u8) -> &'static str {
     match id {
-        3 => "Build unit", // confirmed
+        2 => "Ability on placeable",     // confirmed - tested only on Catachan IED
+        3 => "Build unit",               // confirmed
         5 => "Cancel unit or wargear action",
-        15 => "Tier upgrade", // confirmed
-        46 => "unknown unit action (not special ability)",
-        40 => "Move action",
-        44 => "Move action",  // confirmed
-        47 => "Upgrade unit", // confirmed (like FC -> TFC)
+        11 => "Set rally point",         // confirmed
+        15 => "Upgrade building",       // confirmed
+        43 => "Stop Move",               // confirmed
+        44 => "Move action",             // confirmed
+        47 => "Capture Ressource Point", // confirmed (same for power and req)
         48 => "Upgrade unit",
-        49 => "Attack move",
+        49 => "Reinforce unit",          // confirmed
         50 => "Purchase wargear",        // confirmed
-        51 => "Cancel wargear purchase", //confirmed
+        51 => "Cancel wargear purchase", // confirmed
         52 => "Attack move",             // confirmed
-        53 => "Ability",                 // confirmed
+        53 => "Ability on unit",         // confirmed
+        61 => "Retreat unit",            // confirmed
+        70 => "Force Melee",             // confirmed
+        71 => "Toggle Stance",           // confirmed
+        78 => "Place Building",          // confirmed (can be power node, turret, etc)
         _ => "Unknown",
     }
-}
-
-#[derive(Debug)]
-pub enum ActionTypes {
-    BuildUnit = 3,
-    CancelUnitPurchase = 5,
-    TierUpgrade = 15,
-    UpgradeUnit = 47,
-    PurchaseWargear = 50,
-    CancelWargearPurchase = 51,
 }
