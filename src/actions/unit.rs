@@ -7,6 +7,7 @@ pub struct UnitAction {
     pub unit_id: (u8, u8),
     pub player_id: u8,
     pub tick: u32,
+    pub data: Vec<u8>,
 }
 impl ParseAction for UnitAction {}
 impl<'a> From<ActionData<'a>> for UnitAction {
@@ -19,6 +20,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                 unit_id: (data[10], data[11]),
                 player_id: get_player_id(data),
                 tick: tick,
+                data: data.clone()
             }
         } else {
             if data.len() > 10 && data.len() > 11 {
@@ -28,6 +30,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                     unit_id: (data[10], data[11]),
                     player_id: get_player_id(data),
                     tick: tick,
+                    data: data.clone()
                 }
             } else {
                 // This case may arise when using alt + x
@@ -37,6 +40,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                     unit_id: (0, 0),
                     player_id: get_player_id(data),
                     tick: tick,
+                    data: data.clone()
                 }
             }
         }
@@ -51,9 +55,11 @@ fn get_wargear_by_id(id: u8) -> &'static str {
         218 => "Scout - Shotguns",
         227 => "Vanguard Veteran Squad",
         231 => "Force Commander - Iron Halo",
+        235 => "Techmarine - Refractor Shield",
         240 => "Force Commander - Alacrity armor",
-        252 => "Force Commander - Power Sword",
         241 => "Terminator Force Commander",
+        242 => "Techmarine - Artificer Armor",
+        252 => "Force Commander - Power Sword",
         _ => "Unknown wargear",
     }
 }

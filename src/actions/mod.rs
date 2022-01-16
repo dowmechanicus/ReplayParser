@@ -1,10 +1,11 @@
 use std::fmt;
 
-use self::{building::BuildingAction, unit::UnitAction, unknown::UnknownAction};
+use self::{building::BuildingAction, global::GlobalAction, unit::UnitAction, unknown::UnknownAction};
 
 pub mod building;
 pub mod unit;
 pub mod unknown;
+pub mod global;
 
 pub trait ParseAction: fmt::Debug {}
 
@@ -35,6 +36,7 @@ pub enum ActionType {
     ForceMelee(UnitAction),
     ToggleStance(UnitAction),
     PlaceBuilding(BuildingAction),
+    GlobalAbility(GlobalAction),
     Unknown(UnknownAction),
 }
 
@@ -64,7 +66,7 @@ impl<'a> From<ActionData<'a>> for ActionType {
             70 => ActionType::ForceMelee(UnitAction::from(action_data)),
             71 => ActionType::ToggleStance(UnitAction::from(action_data)),
             78 => ActionType::PlaceBuilding(BuildingAction::from(action_data)),
-            85 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
+            85 => ActionType::GlobalAbility(GlobalAction::from(action_data)),
             89 => ActionType::Unknown(UnknownAction::from(action_data)),
             94 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
             96 => ActionType::Unknown(UnknownAction::from(action_data)), // source 0x0
