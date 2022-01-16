@@ -187,6 +187,23 @@ Looted Tank | 0|3|1|233|3|24|0|16|0|120|185|5|4|253|0|0
 Battlewaggon | 0|3|1|233|3|28|0|16|0|120|185|5|4|251|0|0
 Flash Gitz | 0|3|1|233|3|29|0|16|0|120|185|5|4|239|0|0
 
+## Chaos Space Marines
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Heretics | 0|3|1|233|3|0|0|16|0|120|183|5|4|110|0|0
+Chaos Space Marines | 0|3|1|233|3|1|0|16|0|120|183|5|4|121|0|0
+Havocs | 0|3|1|233|3|2|0|16|0|120|183|5|4|113|0|0
+Noise Marines | 0|3|1|233|3|3|0|16|0|120|183|5|4|115|0|0
+Raptors | 0|3|1|233|3|4|0|16|0|120|183|5|4|120|0|0
+Bloodletters | 0|3|1|233|3|11|0|16|0|120|183|5|4|103|0|0
+Chaos Dreadnought | 0|3|1|233|3|12|0|16|0|120|183|5|4|123|0|0
+Bloodcrusher | 0|3|1|233|3|13|0|16|0|120|183|5|4|114|0|0
+Plague Marines | 0|3|1|233|3|14|0|16|0|120|183|5|4|118|0|0
+Chaos Predator | 0|3|1|233|3|20|0|16|0|120|183|5|4|125|0|0
+Great Unclean One | 0|3|1|233|3|21|0|16|0|120|183|5|4|112|0|0
+Landraider Phobos | 0|3|1|233|3|22|0|16|0|120|183|5|4|124|0|0
+
+
 # Wargear Purchases
 ## Eldar
 ### Farseer
