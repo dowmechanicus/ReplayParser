@@ -23,6 +23,7 @@ pub struct Action {
     pub source: u8,
     pub data: Vec<u8>,
     pub context: (u8, u8),
+    pub meta: Vec<u32>,
     pub details: ActionType,
 }
 
@@ -39,6 +40,7 @@ impl<'a> From<ActionData<'a>> for Action {
             player_id: data[3] - 0xE8,
             source: data[7],
             data: data.clone(),
+            meta: vec![],
             context: get_action_context(data).unwrap_or((0, 0)),
             details: action_type,
         }
@@ -52,6 +54,7 @@ impl Serialize for Action {
     {
         let mut state = serializer.serialize_struct("Action", 6)?;
         state.serialize_field("tick", &self.tick)?;
+        state.serialize_field("meta", serde_json::to_string(&self.meta).unwrap().as_str())?;
         state.serialize_field("timestamp", ticks2time(&self.tick).as_str())?;
         state.serialize_field("action_id", &self.action_id)?;
         state.serialize_field("name", &self.name)?;

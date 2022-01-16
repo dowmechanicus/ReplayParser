@@ -139,11 +139,9 @@ pub fn parse_ticks(
                     for action in actions {
                         match &action.details {
                             ActionType::BuildUnit(..) => replay.actions.push(action),
-                            ActionType::CancelUnitOrWargear(..) => replay.actions.push(action),
                             ActionType::UpgradeBuilding(..) => replay.actions.push(action),
                             ActionType::UpgradeUnit(..) => replay.actions.push(action),
                             ActionType::PurchaseWargear(..) => replay.actions.push(action),
-                            ActionType::CancelWargearPurchase(..) => replay.actions.push(action),
                             _ => (),
                         };
                     }
@@ -180,8 +178,11 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
     // The number of the current tick
     let tick = cursor.read_u32::<LittleEndian>()?;
 
-    // Skip reading another counter and the unknown field...
-    cursor.seek(SeekFrom::Current(8))?;
+    // Reading another counter and the unknown field...
+    let meta = vec![
+        cursor.read_u32::<LittleEndian>()?,
+        cursor.read_u32::<LittleEndian>()?
+    ];
 
     let mut action_bundle = vec![];
 
@@ -208,7 +209,9 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
             let mut buf = vec![0; (action_size - 2) as usize];
             cursor.read_exact(&mut buf)?;
 
-            let action = Action::from((&buf, tick));
+            let mut action = Action::from((&buf, tick));
+
+            action.meta = meta.clone();
 
             action_bundle.push(action);
 
