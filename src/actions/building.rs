@@ -8,8 +8,15 @@ impl ParseAction for BuildingAction {}
 impl<'a> From<ActionData<'a>> for BuildingAction {
     fn from(action_data: ActionData) -> Self {
         let (data, _) = action_data;
-        Self {
-            building_id: data[13],
+
+        if data.len() > 13 {
+            Self {
+                building_id: data[13],
+            }
+        } else {
+            Self {
+                building_id: 0
+            }
         }
     }
 }
