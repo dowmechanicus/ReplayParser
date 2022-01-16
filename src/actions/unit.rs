@@ -3,8 +3,7 @@ use super::*;
 #[derive(Debug, Serialize)]
 pub struct UnitAction {
     pub action_type: u8,
-    pub unit_name: String,
-    pub unit_id: (u8, u8),
+    pub unit_id: u8,
     pub player_id: u8,
     pub tick: u32,
     pub data: Vec<u8>,
@@ -13,35 +12,21 @@ impl ParseAction for UnitAction {}
 impl<'a> From<ActionData<'a>> for UnitAction {
     fn from(action_data: ActionData) -> Self {
         let (data, tick) = action_data;
-        if data.len() > 13 {
+        if data.len() > 10 {
             Self {
                 action_type: data[1],
-                unit_name: get_unit_by_item_id(data[13]).to_string(),
-                unit_id: (data[10], data[11]),
+                unit_id: data[10],
                 player_id: get_player_id(data),
                 tick: tick,
                 data: data.clone(),
             }
         } else {
-            if data.len() > 10 && data.len() > 11 {
-                Self {
-                    action_type: data[1],
-                    unit_name: "unknown".to_string(),
-                    unit_id: (data[10], data[11]),
-                    player_id: get_player_id(data),
-                    tick: tick,
-                    data: data.clone(),
-                }
-            } else {
-                // This case may arise when using alt + x
-                Self {
-                    action_type: data[1],
-                    unit_name: "unknown".to_string(),
-                    unit_id: (0, 0),
-                    player_id: get_player_id(data),
-                    tick: tick,
-                    data: data.clone(),
-                }
+            Self {
+                action_type: data[1],
+                unit_id: 0,
+                player_id: get_player_id(data),
+                tick: tick,
+                data: data.clone(),
             }
         }
     }
