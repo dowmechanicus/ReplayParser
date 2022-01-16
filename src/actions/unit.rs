@@ -20,7 +20,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                 unit_id: (data[10], data[11]),
                 player_id: get_player_id(data),
                 tick: tick,
-                data: data.clone()
+                data: data.clone(),
             }
         } else {
             if data.len() > 10 && data.len() > 11 {
@@ -30,7 +30,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                     unit_id: (data[10], data[11]),
                     player_id: get_player_id(data),
                     tick: tick,
-                    data: data.clone()
+                    data: data.clone(),
                 }
             } else {
                 // This case may arise when using alt + x
@@ -40,7 +40,7 @@ impl<'a> From<ActionData<'a>> for UnitAction {
                     unit_id: (0, 0),
                     player_id: get_player_id(data),
                     tick: tick,
-                    data: data.clone()
+                    data: data.clone(),
                 }
             }
         }

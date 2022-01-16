@@ -10,10 +10,11 @@ Nr.  | TYPE  | LENGTH  | Description
 6-7|  BYTE|  2|  A counter for the actions performed by this player. (confirmed)<br> Starts at 0. This means there is a limit of 65536.<br> Best read as u16 LittleEndian
 8|  BYTE|  1| 0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)<br> 0x20 = unit upgrades, movement<br>0x42 = was spotted with action code 56<br>0x44 = was spotted with action code 56<br>0x0  = seems related to power nodes and placeable entities (Turret, Mines)<br>(seems like any action performed by HQ like building or setting rally point is 10 while every action performed by a unit is 20<br>Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20), 66 (0x42), 68 (0x44)
 9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 93
-10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.<br> Is this the player location/ID?<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 195<br>Values that have been observed so far [u8] additionally: 122
-11-12| BYTE|  2| Most likely the unit identifier. But how/where is it assigned?<br>When building power nodes and generators this has been observed to be (232, 15)
-13-14| BYTE|  2| Always the same? It seems so.<br>When building a power node this has been observed to be (35, 107)<br> When building a generator this has been observed to be (35, 98)<br>When using global abilities this has been observed to be (5,115), (19,123), (19,125), (19,124), (59,119)
-15-19| DWORD| 4| Identifier for the item (unit, upgrade, wargear)<br>See the item codes file for these values<br><br>Identifier for the canceled unit, upgrade, wargear<br>These are numbered in the order they are queued.<br>Units and Base Tiers share the same numbering.<br> Wargear is on a different ordering.<br> Upgrades have a different ordering for every unit. These actions are numbered: upgrades (0x30) and unknown (0x2E)
+10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.<br> Is this the player location/ID?<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 120, 195<br>Values that have been observed so far [u8] additionally: 122
+11| BYTE|  1| Most likely the unit identifier. But how/where is it assigned?
+12-13| BYTE| 2 | Seems to provide more context for the action (see general observations)
+14| BYTE|  1| Identifier for e.g. wargear, unit, global ability.<br><br>When building a power node this has been observed to be 107<br> When building a generator this has been observed to be 98<br>When using global abilities this has been observed to be 115, 123, 125, 124, 119
+15-19| DWORD| 4| **STILL NOT CONFIRMED**<br>Identifier for the item (unit, upgrade, wargear)<br>See the item codes file for these values<br><br>Identifier for the canceled unit, upgrade, wargear<br>These are numbered in the order they are queued.<br>Units and Base Tiers share the same numbering.<br> Wargear is on a different ordering.<br> Upgrades have a different ordering for every unit. These actions are numbered: upgrades (0x30) and unknown (0x2E)
 
 
 # General observations:
@@ -25,9 +26,11 @@ Nr.  | TYPE  | LENGTH  | Description
 
 - Unit id (once unit is on the field) is not the same as the unit/item id when its purchased at the HQ
 
-- Action data fields 12 + 13 seem to decode the following (amongs other stuff):
+- Action data fields 12 + 13 seem to decode the following (amongst other stuff):
+  - (5, 4) => Purchase
   - (15, 35) => Single target, building (e.g. Webway Gate)
-  - (25, 5) => Non-targettable, affects every target-type at once (e.g. Angels of Death, Blessing of the Omnissiah, Swift Movement) or is called in at base (e.g. Seer Council)
+  - (25, 5) => Non-targettable, affects every target-type at once (e.g. Angels of Death, Blessing of the Omnissiah, Swift Movement) or is called in at base (e.g. Seer Council). Also applicable to unit abilities that are self-targetting
+  - (26, 9) => Single target, unit or global ability (e.g. Scout grenades, Farseer Guide, For the Emperor, Crackshot)
   - (26, 19) => Single target with no secondary projectiles (e.g. Drop Pod, Terminators, Eldritch Storm)
   - (28, 59) => Multiple targets but no unit call-in (e.g. Orbital Bombardement)
   - (28, 71) => Multiple targets and unit call-in (e.g. Autarch)
@@ -36,7 +39,7 @@ Nr.  | TYPE  | LENGTH  | Description
 # Global Abilities
 ## Space Marines (Techmarine, Apothecary, Force Commander)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Blessing of the Omnissiah | 0| 85| 1| 233| 3| 0| 0| 0| 0| 3| 233| 25| 5| 115| 3| 0| 0
 Drop Pod | 0| 85| 1| 233| 3| 1| 0| 0| 0| 3| 233| 26| 19| 123| 3| 0| 0| 1| 0| 2| 74| 75| 68| 193| 72|5| 210| 66| 126| 168| 37
@@ -56,7 +59,7 @@ Orbital Bombardement | 0|85|0|232|3|23|0|0|0|3|232|28|59|119|3|0|0|1|0|2|182|98|
 
 ## Eldar (Warlock, WSE, Farseer)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Webway Gate | 0|78|1|233|3|2|0|0|0|3|233|15|35|198|1|0|0|54|10|136|193|86|236|209|66|211|70|37|67|54|10|136|193|86|236|209|66|211|70|38|67|0|0|0|0|0|0
 Swift Movement | 0|85|1|233|3|3|0|0|0|3|233|25|5|197|1|0|0
@@ -76,7 +79,7 @@ Eldritch Storm | 0|85|0|232|3|6|0|0|0|3|232|26|19|201|1|0|0|1|0|2|248|246|73|193
 
 # Unit Abilities
 ## Space Marines
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tacs activate Kraken Rounds | 0|53|1|233|3|6|0|32|0|195|85|25|5|164|3|0|0
 Scouts cloaking | 0|53|1|233|3|7|0|32|0|195|83|25|5|143|3|0|0
@@ -86,3 +89,43 @@ FC battlecry | 0|53|1|233|3|10|0|32|0|195|82|25|5|107|3|0|0
 FC alacrity | 0|53|1|233|3|11|0|32|0|195|82|25|5|110|3|0|0
 FC toggle on halo | 0|53|1|233|3|12|0|32|0|195|82|25|5|109|3|0|0
 FC toggle off halo | 0|53|1|233|3|13|0|32|0|195|82|25|5|109|3|0|0
+
+## Eldar
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Farseer Fleet of Foot | 0|53|1|233|3|8|0|32|0|195|86|25|5|173|1|0|0
+Farseer Guide | 0|53|1|233|3|9|0|32|0|195|86|26|9|182|1|0|0|1|0|4|87
+
+# Unit Purchases
+## Eldar
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Dire Avengers | 0|3|1|233|3|0|0|16|0|120|180|5|4|141|0|0
+Howling Banshees | 0|3|1|233|3|1|0|16|0|120|180|5|4|137|0|0
+Rangers | 0|3|1|233|3|2|0|16|0|120|180|5|4|146|0|0
+Shuriken Platform | 0|3|1|233|3|3|0|16|0|120|180|5|4|144|0|0
+Dark Reapers | 0|3|1|233|3|5|0|16|0|120|180|5|4|138|0|0
+Warp Spiders | 0|3|1|233|3|6|0|16|0|120|180|5|4|148|0|0
+Fire Dragons | 0|3|1|233|3|7|0|16|0|120|180|5|4|140|0|0
+Wraithlord | 0|3|1|233|3|8|0|16|0|120|180|5|4|153|0|0
+Falcon | 0|3|0|232|3|1|0|16|0|120|173|5|4|151|0|0
+Wraithguard | 0|3|0|232|3|2|0|16|0|120|173|5|4|149|0|0
+Fire Prism | 0|3|0|232|3|4|0|16|0|120|173|5|4|152|0|0
+D-Cannon | 0|3|0|232|3|5|0|16|0|120|173|5|4|143|0|0
+Avatar | 0|3|0|232|3|6|0|16|0|120|173|5|4|145|0|0
+Seer Council | 0|3|0|232|3|7|0|16|0|120|173|5|4|147|0|0
+
+# Wargear Purchases
+## Eldar
+### Farseer
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Doombringer |0|50|1|233|3|2|0|32|0|195|86|5|4|192|0|0
+Fortune Armor | 0|50|1|233|3|3|0|32|0|195|86|5|4|184|0|0
+Spirit Stones | 0|50|1|233|3|4|0|32|0|195|86|5|4|175|0|0
+Singing Spear | 0|50|1|233|3|5|0|32|0|195|86|5|4|193|0|0
+Rune Armor | 0|50|1|233|3|6|0|32|0|195|86|5|4|185|0|0
+Ghosthelm | 0|50|1|233|3|7|0|32|0|195|86|5|4|173|0|0
+Gravity Blade | 0|50|1|233|3|10|0|32|0|195|86|5|4|194|0|0
+Asuryan Armor | 0|50|1|233|3|11|0|32|0|195|86|5|4|183|0|0
+Runes of Reaping | 0|50|1|233|3|12|0|32|0|195|86|5|4|174|0|0

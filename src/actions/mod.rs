@@ -1,11 +1,13 @@
 use std::fmt;
 
-use self::{building::BuildingAction, global::GlobalAction, unit::UnitAction, unknown::UnknownAction};
+use self::{
+    building::BuildingAction, global::GlobalAction, unit::UnitAction, unknown::UnknownAction,
+};
 
 pub mod building;
+pub mod global;
 pub mod unit;
 pub mod unknown;
-pub mod global;
 
 pub trait ParseAction: fmt::Debug {}
 
