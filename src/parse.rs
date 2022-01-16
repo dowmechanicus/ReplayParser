@@ -14,7 +14,7 @@ use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
 use std::path::Path;
 
-use crate::actions::{Action, ActionType};
+use crate::actions::Action;
 use crate::chunky;
 
 const TICK_ACTION: u32 = 0;
@@ -136,22 +136,9 @@ pub fn parse_ticks(
                 }
 
                 if actions.len() > 0 {
-                    for mut action in actions {
-                        // Retrieve the players name from the players vector and
-                        // associate it with the action.
-                        if (action.player_id as usize) < replay.players.len() {
-                            if let Chunk::Player(player) = &replay.players[action.player_id as usize] {
-                                action.player_name = player.name.to_string();
-                            };
-                        }
-
-                        match &action.details {
-                            ActionType::BuildUnit(..) => replay.actions.push(action),
-                            ActionType::CancelUnitOrWargear(..) => replay.actions.push(action),
-                            ActionType::UpgradeBuilding(..) => replay.actions.push(action),
-                            ActionType::UpgradeUnit(..) => replay.actions.push(action),
-                            ActionType::PurchaseWargear(..) => replay.actions.push(action),
-                            ActionType::PlaceBuilding(..) => replay.actions.push(action),
+                    for action in actions {
+                        match &action.data[1] {
+                            3 | 5 | 15 | 50 | 78 => replay.actions.push(action),
                             _ => (),
                         };
                     }
@@ -189,7 +176,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
     let tick = cursor.read_u32::<LittleEndian>()?;
 
     // Reading another counter and the unknown field...
-    let meta = vec![
+    let _meta = vec![
         cursor.read_u8()?,
         cursor.read_u8()?,
         cursor.read_u8()?,
@@ -225,9 +212,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
             let mut buf = vec![0; (action_size - 2) as usize];
             cursor.read_exact(&mut buf)?;
 
-            let mut action = Action::from((&buf, tick));
-
-            action.meta = meta.clone();
+            let action = Action::from((&buf, tick));
 
             action_bundle.push(action);
 
