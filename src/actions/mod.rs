@@ -61,6 +61,7 @@ impl<'a> From<ActionData<'a>> for ActionType {
             71 => ActionType::ToggleStance(UnitAction::from(action_data)),
             78 => ActionType::PlaceBuilding(BuildingAction::from(action_data)),
             89 => ActionType::Unknown(UnknownAction::from(action_data)),
+            94 => ActionType::Unknown(UnknownAction::from(action_data)),
             _ => ActionType::Unknown(UnknownAction::from(action_data)),
         }
     }
