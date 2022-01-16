@@ -5,7 +5,7 @@ use identifiers::*;
 
 #[derive(Clone, Default, Serialize)]
 pub struct Action {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
     pub action_type: u8,
     pub player_id: u8,
     pub tick: u32,
@@ -15,9 +15,15 @@ impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ds = f.debug_struct("Action");
         ds
-            .field("Type", &format!("{} ({})", get_action_type_by_id(self.action_type).to_string(), self.data[1]))
-            .field("Ownership ID (?)", &self.data[2])
-            .field("Player", &self.data[3])
+            .field("Type", &format!("{} ({})", get_action_type_by_id(self.action_type).to_string(), self.data[1]));
+
+        {
+            let lower = &self.data[2] & 0xF;
+            let higher = &self.data[2] & 0xF0;
+            ds.field("Ownership ID (?)", &format!("{}/{}", lower, higher))
+        }
+        
+            .field("Player", &format!("{}", self.data[3] - 0xE8))
             .field("Unknown", &self.data[4]);
 
         {
@@ -41,7 +47,7 @@ impl fmt::Debug for Action {
             },
         }
 
-        ds.field("Data", &serde_json::to_string(&self.data[7..]).unwrap());
+        ds.field("Data", &serde_json::to_string(&self.data[8..]).unwrap());
         
         match self.data[1] {
             3 => {
@@ -73,8 +79,9 @@ The action data block has the following format:
               games.
 
               Observation on lower bits: Seem to indicate player base location.
+              Observation on higher bits: 
 
-              Values that have been observed so far [u8]: 0, 1, 128, 129
+              Values that have been observed so far [u8]: 0, 1, 2, 3, 4, 5, 128, 129, 130, 131, 132, 133
 
 4  BYTE  1    Player ID (confirmed)
 
