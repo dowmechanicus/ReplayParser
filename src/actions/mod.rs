@@ -1,5 +1,5 @@
 use serde::{ser::SerializeStruct, Serialize};
-use std::fmt;
+use std::{fmt};
 
 use self::{
     building::BuildingAction, global::GlobalAction, unit::UnitAction, unknown::UnknownAction,
@@ -52,6 +52,7 @@ impl Serialize for Action {
     {
         let mut state = serializer.serialize_struct("Action", 6)?;
         state.serialize_field("tick", &self.tick)?;
+        state.serialize_field("timestamp", ticks2time(&self.tick).as_str())?;
         state.serialize_field("action_id", &self.action_id)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("player_id", &self.player_id)?;
@@ -144,4 +145,12 @@ fn get_action_context(data: &Vec<u8>) -> Result<(u8, u8), ()> {
     } else {
         Err(())
     }
+}
+
+fn ticks2time(ticks: &u32) -> String {
+    let total_seconds = f32::floor(*ticks as f32 / 10.0);
+    let minutes = f32::floor(total_seconds / 60.0);
+    let remaining_seconds = total_seconds - (minutes * 60.0);
+
+    format!("{:02}:{:02}", minutes, remaining_seconds)
 }
