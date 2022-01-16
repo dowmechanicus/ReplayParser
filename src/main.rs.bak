@@ -1,0 +1,483 @@
+use std::env;
+use std::fs::File;
+use std::path::Path;
+use std::io::{self, Read, Seek, SeekFrom, Cursor, Error, ErrorKind};
+
+extern crate byteorder;
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+extern crate crypto;
+
+use byteorder::{ReadBytesExt, LittleEndian};
+use crypto::md5::Md5;
+use crypto::digest::Digest;
+
+const TICK_ACTION: u32 = 0;
+const TICK_CHATMSG: u32 = 1;
+
+#[derive(Serialize)]
+pub struct Action {
+    tick: u32,
+    data: Vec<u8>,
+}
+#[derive(Serialize)]
+pub struct Message {
+    tick: u32,
+    sender: String,
+    receiver: String,
+    body: String,
+}
+
+#[derive(Serialize)]
+pub struct ReplayInfo {
+    name: String,
+    mod_chksum: u32,
+    mod_version: u32,
+    md5: String,
+    date: String,
+    ticks: u32,
+    game: chunky::Chunk,
+    map: chunky::Chunk,
+    players: Vec<chunky::Chunk>,
+    observers: Vec<chunky::Chunk>,
+    messages: Vec<Message>,
+}
+
+mod chunky {
+    use std::io::{self, Cursor, Read, Seek, SeekFrom, Error, ErrorKind};
+    use byteorder::{ReadBytesExt, LittleEndian};
+
+    #[derive(Debug,Serialize)]
+    #[serde(untagged)]
+    pub enum Chunk {
+        Game { 
+            name: String,
+            mode: String,
+            resources: String,
+            locations: String,
+            victory_points: u32,
+        },
+        Data { duration: u32 },
+        Map { 
+            name: String,
+            description: String,
+            abbrname: String,
+            maxplayers: u32,
+            path: String,
+            date: String,
+            width: u32,
+            height: u32,
+        },
+        Player {
+            name: String,
+            kind: u32,
+            team: u32,
+            race: String,
+            relic_id: u64,
+            rank: u32,
+            cpu: u32,
+            hero: u32,
+            skin_path: String,
+            skin_name: String,
+            id: u8,
+        },
+        FoldInfo { size: u32 },
+        Empty {}
+    }
+
+    pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+        let mut buf = vec![0; 8];
+        cursor.read_exact(&mut buf)?;
+        let chunk_name = String::from_utf8(buf).unwrap_or("".to_string());
+        let chunk_version = cursor.read_u32::<LittleEndian>()?;
+        let chunk_size = cursor.read_u32::<LittleEndian>()?;
+
+        /*
+        println!("chunk {} ver={} size={}",
+                 chunk_name, chunk_version, chunk_size);
+        */
+
+        cursor.seek(SeekFrom::Current(12))?;
+
+        let result = match chunk_name.as_ref() {
+            "DATADATA" => parse_data(&mut cursor),
+            "DATASDSC" => parse_sdsc(&mut cursor),
+            "DATABASE" => parse_base(&mut cursor),
+            "DATAINFO" => parse_info(&mut cursor),
+            "FOLDINFO" => Ok(Chunk::FoldInfo { size: chunk_size }),
+            "FOLDPOST" | "FOLDGPLY" => Ok(Chunk::Empty {}),
+            _ => {
+                let msg = format!("invalid chunk \"{}\" at position {}",
+                                  chunk_name, cursor.position());
+                return Err(Error::new(ErrorKind::InvalidData, msg))
+            }
+        }?;
+
+        Ok(result)
+    }
+
+    fn parse_data(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+        Ok(Chunk::Data {
+            duration: cursor.read_u32::<LittleEndian>()?
+        })
+        /*
+        println!("\tduration: {}:{:.1}", chunk.duration/600,
+                 (chunk.Data.duration/10)%60);
+        */
+    }
+
+    fn parse_sdsc(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+        cursor.seek(SeekFrom::Current(4))?;
+        let date = read_vstring_utf16(&mut cursor); 
+        cursor.seek(SeekFrom::Current(8))?;
+        let path = read_vstring(&mut cursor);
+        let name = read_vstring_utf16(&mut cursor); 
+        let abbrname = read_vstring_utf16(&mut cursor); 
+        let description = read_vstring_utf16(&mut cursor); 
+        let maxplayers = cursor.read_u32::<LittleEndian>().unwrap();
+        let width = cursor.read_u32::<LittleEndian>().unwrap();
+        let height = cursor.read_u32::<LittleEndian>().unwrap();
+
+        cursor.seek(SeekFrom::Current(12 + 4 + path.len() as i64))?;
+
+        Ok(Chunk::Map {
+            date: date,
+            path: path,
+            name: name,
+            abbrname: abbrname,
+            description: description,
+            maxplayers: maxplayers,
+            width: width,
+            height: height,
+        })
+
+        /*
+        println!("date: {}", chunk.date);
+        println!("mod: {}", chunk.modname);
+        println!("path: {}", chunk.path);
+        println!("name: {}", chunk.name);
+        println!("abbrname: {}", chunk.abbrname);
+        println!("description: {}", chunk.description);
+        println!("maxplayers: {}", chunk.maxplayers);
+        println!("width: {}", chunk.width);
+        println!("height: {}", chunk.height);
+        */
+    }
+
+    fn parse_base(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+        let mut vpc = 0;
+        let mut resources = String::new();
+        let mut locations = String::new();
+        let mut mode = "Annihilation".to_owned();
+        let num_vps = |i:u32| -> u32 { let b:u32 = 2; 250*(b.pow(i)) };
+        cursor.seek(SeekFrom::Current(12))?;
+        let nparams = cursor.read_u32::<LittleEndian>()?;
+        for _ in 0..nparams {
+            let val = cursor.read_u32::<LittleEndian>()?;
+            let mut buf = vec![0; 4];
+            cursor.read_exact(&mut buf)?;
+            let key = String::from_utf8(buf).unwrap_or("".to_string());
+            match key.as_ref() {
+                "KTPV" => vpc = num_vps(val),
+                "TSSR" if val == 0 => resources = "Standard".to_owned(),
+                "TSSR" if val != 0 => resources = "High".to_owned(),
+                "COLS" if val == 0 => locations = "Random".to_owned(),
+                "COLS" if val != 0 => locations = "Fixed".to_owned(),
+                _ => ()
+            };
+        }
+
+        cursor.seek(SeekFrom::Current(1))?;
+        let name = read_vstring_utf16(&mut cursor); 
+        cursor.seek(SeekFrom::Current(4))?;
+        let nconds = cursor.read_u32::<LittleEndian>()?;
+        for _ in 0..nconds {
+            let i = cursor.read_u32::<LittleEndian>()?;
+            if i == 0x1576eb00 {
+                mode = "Victory Point Control".to_owned();
+            }
+        }
+        cursor.seek(SeekFrom::Current(12))?;
+
+        Ok(Chunk::Game {
+            name: name,
+            mode: mode,
+            resources: resources,
+            locations: locations,
+            victory_points: vpc,
+        })
+    }
+
+    fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+        let name = read_vstring_utf16(&mut cursor);
+        let kind = cursor.read_u32::<LittleEndian>()?;
+        let team = cursor.read_u32::<LittleEndian>()?;
+        let race = read_vstring(&mut cursor);
+        let relic_id = cursor.read_u64::<LittleEndian>()?;
+        let rank = cursor.read_u32::<LittleEndian>()?;
+        cursor.seek(SeekFrom::Current(4))?;
+        let cpu = cursor.read_u32::<LittleEndian>()?;
+        let hero = cursor.read_u32::<LittleEndian>()?;
+        cursor.seek(SeekFrom::Current(10))?;
+        let skin_path = read_vstring(&mut cursor);
+        cursor.seek(SeekFrom::Current(4))?;
+        let skin_name = read_vstring_utf16(&mut cursor);
+        let id = cursor.read_u8()?;
+        let tmp = cursor.read_u8()?;
+        if tmp == 0 || tmp == 0xff {
+            cursor.seek(SeekFrom::Current(2))?;
+        }
+
+        Ok(Chunk::Player {
+            name: name,
+            kind: kind,
+            team: team,
+            race: race,
+            relic_id: relic_id,
+            rank: rank,
+            cpu: cpu,
+            hero: hero,
+            skin_path: skin_path,
+            skin_name: skin_name,
+            id: id
+        })
+    }
+
+    pub fn read_vstring(cursor: &mut Cursor<Vec<u8>>) -> String {
+        let nchars = match cursor.read_u32::<LittleEndian>() {
+            Ok(r) => r,
+            Err(_) => 0
+        };
+        let mut buf = vec![0; nchars as usize];
+
+        if let Err(_) = cursor.read_exact(&mut buf) {
+            return "".to_string()
+        }
+
+        String::from_utf8(buf).unwrap_or("".to_string())
+    }
+
+    pub fn read_vstring_utf16(cursor: &mut Cursor<Vec<u8>>) -> String {
+        let nchars = match cursor.read_u32::<LittleEndian>() {
+            Ok(r) => r,
+            Err(_) => 0
+        };
+        let mut buf: Vec<u16> = Vec::with_capacity(nchars as usize);
+
+        for _ in 0..nchars {
+            match cursor.read_u16::<LittleEndian>() {
+                Ok(c) => buf.push(c),
+                Err(_) => (),
+            }
+        }
+
+        String::from_utf16(&buf).unwrap_or("".to_string())
+    }
+}
+
+fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
+    let mut file = File::open(path)?;
+    let mut buf = [0; 20];
+    let mut vec = Vec::new();
+
+    file.read(&mut buf)?;
+
+    if buf[12..20].eq(b"DOW2_REC") {
+        file.seek(SeekFrom::Start(0))?;
+        file.read_to_end(&mut vec)?;
+        Ok(vec)
+    } else {
+        Err(Error::new(ErrorKind::InvalidData, "invalid replay file"))
+    }
+}
+
+
+fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
+    let bytes = read_rec_file(path)?;
+    let len = bytes.len() as u64;
+    let mut pos = len;
+    let mut cursor = Cursor::new(bytes);
+    //
+    let version = cursor.read_u32::<LittleEndian>()?;
+    let mod_chksum = cursor.read_u32::<LittleEndian>()?;
+    cursor.seek(SeekFrom::Current(4))?;
+    cursor.seek(SeekFrom::Current(8))?;
+
+    let mut buf: Vec<u16> = Vec::new();
+    for _ in 0..19 {
+        let c = cursor.read_u16::<LittleEndian>().unwrap_or(0);
+        if c > 31 && c < 123 {
+            buf.push(c);
+        }
+    }
+
+    let date = String::from_utf16(&buf).unwrap();
+
+    let game = chunky::Chunk::Game { 
+        name: "".to_string(),
+        mode: "".to_string(),
+        resources: "".to_string(),
+        locations: "".to_string(),
+        victory_points: 0,
+    };
+     
+    let map = chunky::Chunk::Map { 
+        name: "".to_string(),
+        description: "".to_string(),
+        abbrname: "".to_string(),
+        maxplayers: 0,
+        path: "".to_string(),
+        date: "".to_string(),
+        width: 0,
+        height: 0,
+    };
+
+    let mut replay = ReplayInfo {
+        name: "".to_string(),
+        mod_chksum: mod_chksum,
+        mod_version: version,
+        md5: "".to_string(),
+        date: date,
+        ticks: 0,
+        game: game,
+        map: map,
+        players: Vec::new(),
+        observers: Vec::new(),
+        messages: Vec::new(),
+    };
+
+    cursor.seek(SeekFrom::Current(26))?;
+    let mut buf = vec![0; 12];
+    cursor.read_exact(&mut buf)?;
+    let file_format = String::from_utf8(buf).unwrap_or("".to_string());
+
+    cursor.seek(SeekFrom::Current(24))?;
+    chunky::parse(&mut cursor)?;
+    if let chunky::Chunk::Data { duration } = chunky::parse(&mut cursor)? {
+        replay.ticks = duration;
+    }
+    cursor.seek(SeekFrom::Current(36))?;
+
+    loop {
+        if cursor.position() >= pos {
+            break; // end of header chunks, start of actions
+        }
+
+        match chunky::parse(&mut cursor)? {
+            c@ chunky::Chunk::Empty { .. }      => (),
+               chunky::Chunk::FoldInfo { size } => pos = cursor.position() +
+                                                         size as u64,
+               chunky::Chunk::Data { duration } => replay.ticks = duration,
+            c@ chunky::Chunk::Map { .. }        => replay.map = c,
+            c@ chunky::Chunk::Game { .. }       => replay.game = c,
+            c@ chunky::Chunk::Player { .. }     => { 
+                if let chunky::Chunk::Player { kind, .. } = c {
+                    if kind == 2 || kind == 5 {
+                        replay.observers.push(c)
+                    } else {
+                        replay.players.push(c)
+                    }
+                }
+            }
+        };
+    }
+
+    let mut current_tick = 0;
+    let mut md5 = Md5::new();
+
+    loop {
+        if cursor.position() >= len {
+            break;
+        }
+
+        let tick_type = cursor.read_u32::<LittleEndian>()?;
+        let tick_size = cursor.read_u32::<LittleEndian>()?;
+
+        match tick_type {
+            TICK_ACTION  => {
+                let action = parse_action(&mut cursor)?;
+                if action.tick > 0 { current_tick = action.tick }
+                md5.input(action.data.as_slice());
+            }
+            TICK_CHATMSG => {
+                let msg = parse_message(&mut cursor, current_tick)?;
+                replay.messages.push(msg);
+            }
+            _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action"))
+        };
+    }
+
+    replay.md5 = md5.result_str();
+
+    Ok(replay)
+}
+
+fn parse_action(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Action, io::Error> {
+    cursor.seek(SeekFrom::Current(1))?;
+    let tick = cursor.read_u32::<LittleEndian>()?;
+    cursor.seek(SeekFrom::Current(8))?;
+    let mut actions = Vec::new();
+    let nactions = cursor.read_u32::<LittleEndian>()?;
+    for _ in 0..nactions {
+        cursor.seek(SeekFrom::Current(8))?;
+        let mut bytes_remain = cursor.read_u32::<LittleEndian>()?;
+        while bytes_remain > 0 {
+            cursor.seek(SeekFrom::Current(1))?;
+            let action_size = cursor.read_u8()?;
+            let mut buf = vec![0; (action_size-2) as usize];
+            cursor.read_exact(&mut buf)?;
+            actions.append(&mut buf);
+            bytes_remain -= action_size as u32;
+        }
+        cursor.seek(SeekFrom::Current(1))?;
+    }
+
+    Ok(Action {
+        tick: tick,
+        data: actions,
+    })
+}
+
+fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32)
+                 -> Result<Message, io::Error> {
+    cursor.seek(SeekFrom::Current(8))?;
+    let sender = chunky::read_vstring_utf16(&mut cursor); 
+    cursor.seek(SeekFrom::Current(4))?;
+    let kind = cursor.read_u32::<LittleEndian>()?;
+    let local = cursor.read_u32::<LittleEndian>()?;
+    let body = chunky::read_vstring_utf16(&mut cursor); 
+
+    let receiver = match local {
+        1 if kind == 1 => "observers".to_string(),
+        1 if kind != 1 => "team".to_string(),
+        _ => "all".to_string()
+    };
+
+    Ok(Message {
+        tick: tick,
+        sender: sender,
+        receiver: receiver,
+        body: body,
+    })
+}
+
+fn main() {
+    if let Some(arg) = env::args().nth(1) {
+        let path = Path::new(&arg);
+        let replay = match parse_replay(&path) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("error: {}", e);
+                std::process::exit(1);
+            }
+        };
+        let json = serde_json::to_string_pretty(&replay).unwrap();
+        println!("{}", json);
+
+    } else {
+        println!("must supply a file");
+    }
+}
+
