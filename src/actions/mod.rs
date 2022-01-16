@@ -1,13 +1,16 @@
 use serde::{ser::SerializeStruct, Serialize};
-use std::{fmt};
+use std::fmt;
 
-use self::{building::BuildingAction, global::GlobalAction, purchase_unit::PurchaseUnitAction, purchase_wargear::PurchaseWargearAction, unit::UnitAction, unknown::UnknownAction};
+use self::{
+    building::BuildingAction, global::GlobalAction, purchase_unit::PurchaseUnitAction,
+    purchase_wargear::PurchaseWargearAction, unit::UnitAction, unknown::UnknownAction,
+};
 
 pub mod building;
 pub mod global;
-pub mod unit;
 pub mod purchase_unit;
 pub mod purchase_wargear;
+pub mod unit;
 pub mod unknown;
 
 pub trait ParseAction: fmt::Debug {}
@@ -62,7 +65,10 @@ impl Serialize for Action {
         state.serialize_field("name", &self.name)?;
         state.serialize_field("player_id", &self.player_id)?;
         state.serialize_field("player_name", &self.player_name)?;
-        state.serialize_field("source", format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str())?;
+        state.serialize_field(
+            "source",
+            format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str(),
+        )?;
         state.serialize_field("data", serde_json::to_string(&self.data).unwrap().as_str())?;
         state.serialize_field(
             "context",

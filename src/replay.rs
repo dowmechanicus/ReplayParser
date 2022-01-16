@@ -1,8 +1,4 @@
-use crate::{
-    actions::{Action},
-    chunky::Chunk,
-    message::Message,
-};
+use crate::{actions::Action, chunky::Chunk, message::Message};
 
 #[derive(Default, Serialize)]
 pub struct ReplayInfo {

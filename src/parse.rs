@@ -187,7 +187,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
     // Reading another counter and the unknown field...
     let meta = vec![
         cursor.read_u32::<LittleEndian>()?,
-        cursor.read_u32::<LittleEndian>()?
+        cursor.read_u32::<LittleEndian>()?,
     ];
 
     let mut action_bundle = vec![];
