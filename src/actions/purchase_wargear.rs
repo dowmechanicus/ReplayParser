@@ -28,9 +28,9 @@ impl<'a> From<ActionData<'a>> for PurchaseWargearAction {
 
 fn get_wargear_by_item_id(id: u8) -> &'static str {
     match id {
-        133 => "Immolator",
-        198 => "Champions Robe",
-        109 => "Channeling Runes",
+        198 => "Immolator",
+        197 => "Merciless Witchblade",
+        196 => "Witchblade of Kurnous",
         186 => "Merciless Witchblade",
         176 => "Cloak of Shadows",
         197 => "Warp Throw",
