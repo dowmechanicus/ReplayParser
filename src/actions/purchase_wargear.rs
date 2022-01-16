@@ -4,7 +4,6 @@ use super::*;
 pub struct PurchaseWargearAction {
     pub unit_id: u8,
     pub wargear_id: u8,
-    pub wargear_name: String,
 }
 impl ParseAction for PurchaseWargearAction {}
 impl<'a> From<ActionData<'a>> for PurchaseWargearAction {
@@ -14,13 +13,11 @@ impl<'a> From<ActionData<'a>> for PurchaseWargearAction {
             Self {
                 unit_id: data[10],
                 wargear_id: data[13],
-                wargear_name: get_hero_wargear_by_item_id(data[13]).to_string(),
             }
         } else {
             Self {
                 unit_id: 0,
                 wargear_id: data[13],
-                wargear_name: "".to_string(),
             }
         }
     }
