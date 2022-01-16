@@ -153,6 +153,20 @@ Powerblades | 0|50|1|233|3|14|0|32|0|195|86|5|4|200|0|0
 Phase Armor | 0|50|1|233|3|16|0|32|0|195|86|5|4|191|0|0
 Anti-Grav Grenade | 0|50|1|233|3|18|0|32|0|195|86|5|4|180|0|0
 
+### Warlock
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Immolator | 0|50|0|232|3|2|0|32|0|195|84|5|4|198|0|0
+Champion's Robe | 0|50|0|232|3|3|0|32|0|195|84|5|4|186|0|0
+Channeling Runes | 0|50|0|232|3|4|0|32|0|195|84|5|4|176|0|0
+Merciless Witchblade | 0|50|0|232|3|5|0|32|0|195|84|5|4|197|0|0
+Cloak of Shadows | 0|50|0|232|3|6|0|32|0|195|84|5|4|187|0|0
+Warp Throw | 0|50|0|232|3|12|0|32|0|195|84|5|4|178|0|0
+Witchblade of Kurnous | 0|50|0|232|3|13|0|32|0|195|84|5|4|196|0|0
+Providence | 0|50|0|232|3|14|0|32|0|195|84|5|4|188|0|0
+Heart of Darkness | 0|50|0|232|3|15|0|32|0|195|84|5|4|179|0|0
+Falochu's Wing | 0|50|0|232|3|16|0|32|0|195|84|5|4|177|0|0
+
 # Building Purchases
 
 ## Nodes + Generators

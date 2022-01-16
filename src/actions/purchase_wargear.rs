@@ -14,7 +14,7 @@ impl<'a> From<ActionData<'a>> for PurchaseWargearAction {
             Self {
                 unit_id: data[10],
                 wargear_id: data[13],
-                wargear_name: get_wargear_by_item_id(data[13]).to_string(),
+                wargear_name: get_hero_wargear_by_item_id(data[13]).to_string(),
             }
         } else {
             Self {
@@ -26,16 +26,30 @@ impl<'a> From<ActionData<'a>> for PurchaseWargearAction {
     }
 }
 
-fn get_wargear_by_item_id(id: u8) -> &'static str {
+fn get_unit_wargear_by_item_id(id: u8) -> &'static str {
+   match id { 
+        197 => "Assault Marine Sergeant",
+        216 => "Elite training",
+        217 => "Sergeant",
+        218 => "Shotguns",
+        227 => "Vanguard Veteran Squad",
+        _ => "Unknown wargear"
+   }
+}
+
+fn get_hero_wargear_by_item_id(id: u8) -> &'static str {
     match id {
         198 => "Immolator",
         197 => "Merciless Witchblade",
         196 => "Witchblade of Kurnous",
-        186 => "Merciless Witchblade",
-        176 => "Cloak of Shadows",
+        186 => "Champion's Robe",
+        188 => "Providence",
+        177 => "Faolchu's Wing",
+        179 => "Heart of Darkness",
+        176 => "Channeling Runes",
         197 => "Warp Throw",
-        187 => "Witchblade of Kurnous",
-        178 => "Providence",
+        187 => "Cloak of Shadows",
+        178 => "Warp Throw",
         144 => "Heart of Darkness",
         196 => "Faolchu's Wing",
         195 => "Heavy Gauge Death Spinner",
@@ -56,11 +70,6 @@ fn get_wargear_by_item_id(id: u8) -> &'static str {
         194 => "Gravity Blade",
         183 => "Asuryan Armor",
         174 => "Runes of Reaping",
-        197 => "Assault Marine Sergeant",
-        216 => "Elite training",
-        217 => "Sergeant",
-        218 => "Shotguns",
-        227 => "Vanguard Veteran Squad",
         235 => "Refractor Shield",
         242 => "Artificer Armor",
         252 => "Power Sword",
