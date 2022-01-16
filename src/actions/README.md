@@ -236,6 +236,23 @@ Lictor | 0|3|0|232|3|21|0|16|0|120|173|5|4|3|1|0
 Swarmlord | 0|3|0|232|3|22|0|16|0|120|173|5|4|10|1|0
 Neurothrope | 0|3|0|232|3|26|0|16|0|120|173|5|4|16|1|0
 
+## Ordo Malleus
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Inquisitorial Storm Troopers | 0|3|1|233|3|0|0|16|0|120|182|5|4|177|0|0
+Strike Squad | 0|3|1|233|3|1|0|16|0|120|182|5|4|178|0|0
+Inquistorial Operatives | 0|3|1|233|3|2|0|16|0|120|182|5|4|173|0|0
+Purgation Squad | 0|3|1|233|3|3|0|16|0|120|182|5|4|175|0|0
+Interceptor Squad | 0|3|1|233|3|4|0|16|0|120|182|5|4|169|0|0
+Purifiers | 0|3|1|233|3|11|0|16|0|120|182|5|4|176|0|0
+Terminator Librarian | 0|3|1|233|3|12|0|16|0|120|182|5|4|170|0|0
+Grey Knight Dreadnought | 0|3|1|233|3|13|0|16|0|120|182|5|4|181|0|0
+Vindicare Assassin | 0|3|1|233|3|14|0|16|0|120|182|5|4|180|0|0
+Rhino | 0|3|1|233|3|19|0|16|0|120|182|5|4|183|0|0
+Grey Knight Terminators | 0|3|1|233|3|22|0|16|0|120|182|5|4|179|0|0
+Landraider Crusader | 0|3|1|233|3|23|0|16|0|120|182|5|4|182|0|0
+Vortimer Razorback | 0|3|1|233|3|24|0|16|0|120|182|5|4|184|0|0
+
 
 # Wargear Purchases
 ## Eldar
