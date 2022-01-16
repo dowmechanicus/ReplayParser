@@ -39,6 +39,9 @@ pub enum ActionType {
     ToggleStance(UnitAction),
     PlaceBuilding(BuildingAction),
     GlobalAbility(GlobalAction),
+    EnterBuildingOrVehicle(UnitAction),
+    ExitBuilding(UnitAction),
+    ExitVehicle(UnitAction),
     Unknown(UnknownAction),
 }
 
@@ -52,7 +55,7 @@ impl<'a> From<ActionData<'a>> for ActionType {
             9 => ActionType::Unknown(UnknownAction::from(action_data)), // source: 0x10
             11 => ActionType::SetRallyPoint(BuildingAction::from(action_data)),
             15 => ActionType::UpgradeBuilding(BuildingAction::from(action_data)),
-            23 => ActionType::Unknown(UnknownAction::from(action_data)), // might be call-in from global as its source is 0x10
+            23 => ActionType::ExitBuilding(UnitAction::from(action_data)),
             43 => ActionType::StopMove(UnitAction::from(action_data)),
             44 => ActionType::Move(UnitAction::from(action_data)),
             47 => ActionType::CapturePoint(UnitAction::from(action_data)),
@@ -62,8 +65,8 @@ impl<'a> From<ActionData<'a>> for ActionType {
             51 => ActionType::CancelWargearPurchase(UnitAction::from(action_data)),
             52 => ActionType::AttackMove(UnitAction::from(action_data)),
             53 => ActionType::AbilityOnUnit(UnitAction::from(action_data)),
-            56 => ActionType::Unknown(UnknownAction::from(action_data)), // sources: 0x20, 0x43 - can be invoked rapidly in succession - unit related
-            58 => ActionType::Unknown(UnknownAction::from(action_data)), // source: 0x20
+            56 => ActionType::EnterBuildingOrVehicle(UnitAction::from(action_data)),
+            58 => ActionType::ExitVehicle(UnitAction::from(action_data)),
             61 => ActionType::Retreat(UnitAction::from(action_data)),
             70 => ActionType::ForceMelee(UnitAction::from(action_data)),
             71 => ActionType::ToggleStance(UnitAction::from(action_data)),
