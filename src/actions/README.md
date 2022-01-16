@@ -152,3 +152,57 @@ Shimmer Orb | 0|50|1|233|3|12|0|32|0|195|86|5|4|182|0|0
 Powerblades | 0|50|1|233|3|14|0|32|0|195|86|5|4|200|0|0
 Phase Armor | 0|50|1|233|3|16|0|32|0|195|86|5|4|191|0|0
 Anti-Grav Grenade | 0|50|1|233|3|18|0|32|0|195|86|5|4|180|0|0
+
+# Building Purchases
+## Eldar
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|124|0|0
+Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|125|0|0
+
+
+## Ordo Malleus
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|0|232|3|1|0|16|0|120|173|5|4|190|1|0
+
+
+## Chaos Space Marines
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|1|233|3|0|0|16|0|120|185|5|4|40|0|0 
+Tier 3 | 0|15|1|233|3|1|0|16|0|120|185|5|4|41|0|0 
+
+
+## Imperial Guard
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|52|1|0
+Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|54|1|0
+
+
+## Orks
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|20|2|0
+Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|21|2|0
+
+
+## Space Marines
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|190|1|0
+Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|191|1|0
+
+
+## Tyranids
+
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|82|2|0
+Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|83|2|0
