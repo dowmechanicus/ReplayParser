@@ -42,6 +42,9 @@ Nr.  | TYPE  | LENGTH  | Description
   - (28, 71) => Multiple targets and unit call-in (e.g. Autarch)
   - (32, 84) => Something to do with action type 48
 
+- Canceling a unit purchase functions like clearing an item from an array without removing the item itself ("nulling" instead of delete). There exists an internal counter that keeps track of each distinct purchase
+  even if the same unit is purchases and immediately cancelled. That will still cause the counter to increment.
+
 
 # Global Abilities
 ## Space Marines (Techmarine, Apothecary, Force Commander)
@@ -136,3 +139,16 @@ Ghosthelm | 0|50|1|233|3|7|0|32|0|195|86|5|4|173|0|0
 Gravity Blade | 0|50|1|233|3|10|0|32|0|195|86|5|4|194|0|0
 Asuryan Armor | 0|50|1|233|3|11|0|32|0|195|86|5|4|183|0|0
 Runes of Reaping | 0|50|1|233|3|12|0|32|0|195|86|5|4|174|0|0
+
+### Warpspider Exarch
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Heavy Gauge Death Spinner | 0|50|1|233|3|2|0|32|0|195|86|5|4|195|0|0
+Improved Warp Generator | 0|50|1|233|3|4|0|32|0|195|86|5|4|190|0|0
+Improved Targeters | 0|50|1|233|3|6|0|32|0|195|86|5|4|181|0|0
+Entangling Web | 0|50|1|233|3|8|0|32|0|195|86|5|4|199|0|0
+Enhanced Warp Jump Generator | 0|50|1|233|3|10|0|32|0|195|86|5|4|189|0|0
+Shimmer Orb | 0|50|1|233|3|12|0|32|0|195|86|5|4|182|0|0
+Powerblades | 0|50|1|233|3|14|0|32|0|195|86|5|4|200|0|0
+Phase Armor | 0|50|1|233|3|16|0|32|0|195|86|5|4|191|0|0
+Anti-Grav Grenade | 0|50|1|233|3|18|0|32|0|195|86|5|4|180|0|0
