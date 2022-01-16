@@ -2,6 +2,7 @@
 name = "dow_replay_parser"
 version = "0.1.0"
 authors = ["Myrdal <myrdal@dawnofwar.info>"]
+edition = "2018"
 
 [dependencies]
 byteorder = "1.4.3"

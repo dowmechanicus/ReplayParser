@@ -6,15 +6,15 @@ use chunky::Chunk;
 use chunky::Data as DataChunk;
 use chunky::Player as PlayerChunk;
 
-use message::Message;
-use replay::ReplayInfo;
+use crate::message::Message;
+use crate::replay::ReplayInfo;
 
 use std::fs::File;
 use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
 use std::path::Path;
 
-use crate::actions::ActionType;
+use crate::actions::{Action, ActionType};
 use crate::chunky;
 
 const TICK_ACTION: u32 = 0;
@@ -137,14 +137,14 @@ pub fn parse_ticks(
 
                 if actions.len() > 0 {
                     for action in actions {
-                        match action {
-                            a @ ActionType::BuildUnit(..) => replay.actions.push(a),
-                            a @ ActionType::CancelUnitOrWargear(..) => replay.actions.push(a),
-                            a @ ActionType::UpgradeBuilding(..) => replay.actions.push(a),
-                            a @ ActionType::UpgradeUnit(..) => replay.actions.push(a),
-                            a @ ActionType::PurchaseWargear(..) => replay.actions.push(a),
-                            a @ ActionType::CancelWargearPurchase(..) => replay.actions.push(a),
-                            a @ _ => replay.actions.push(a),
+                        match &action.details {
+                            ActionType::BuildUnit(..) => replay.actions.push(action),
+                            ActionType::CancelUnitOrWargear(..) => replay.actions.push(action),
+                            ActionType::UpgradeBuilding(..) => replay.actions.push(action),
+                            ActionType::UpgradeUnit(..) => replay.actions.push(action),
+                            ActionType::PurchaseWargear(..) => replay.actions.push(action),
+                            ActionType::CancelWargearPurchase(..) => replay.actions.push(action),
+                            _ => replay.actions.push(action),
                         };
                     }
                 }
@@ -173,7 +173,7 @@ pub fn parse_ticks(
 /// * DWORD [4 bytes] = Unknown. Varies with every action tick.
 /// * DWORD [4 bytes] = The amount of player actions bundles in this tick.
 ///
-pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<ActionType>, u32), io::Error> {
+pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), io::Error> {
     // Always the same
     cursor.seek(SeekFrom::Current(1))?;
 
@@ -208,7 +208,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<ActionType>, u3
             let mut buf = vec![0; (action_size - 2) as usize];
             cursor.read_exact(&mut buf)?;
 
-            let action = ActionType::from((&buf, tick));
+            let action = Action::from((&buf, tick));
 
             action_bundle.push(action);
 

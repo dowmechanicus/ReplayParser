@@ -40,6 +40,7 @@ Nr.  | TYPE  | LENGTH  | Description
   - (26, 19) => Single target with no secondary projectiles (e.g. Drop Pod, Terminators, Eldritch Storm)
   - (28, 59) => Multiple targets but no unit call-in (e.g. Orbital Bombardement)
   - (28, 71) => Multiple targets and unit call-in (e.g. Autarch)
+  - (32, 84) => Something to do with action type 48
 
 
 # Global Abilities
