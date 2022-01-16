@@ -203,6 +203,22 @@ Chaos Predator | 0|3|1|233|3|20|0|16|0|120|183|5|4|125|0|0
 Great Unclean One | 0|3|1|233|3|21|0|16|0|120|183|5|4|112|0|0
 Landraider Phobos | 0|3|1|233|3|22|0|16|0|120|183|5|4|124|0|0
 
+## Imperial Guard
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Guardsmen | 0|3|0|232|3|0|0|16|0|120|173|5|4|192|0|0
+Sentinel | 0|3|0|232|3|1|0|16|0|120|173|5|4|204|0|0
+Heavy Weapons Squad | 0|3|0|232|3|2|0|16|0|120|173|5|4|193|0|0
+Catachan Devils | 0|3|0|232|3|3|0|16|0|120|173|5|4|191|0|0
+Spotters | 0|3|0|232|3|4|0|16|0|120|173|5|4|197|0|0
+Stormtroopers | 0|3|0|232|3|11|0|16|0|120|173|5|4|198|0|0
+Chimera | 0|3|0|232|3|12|0|16|0|120|173|5|4|201|0|0
+Ogryn Squad | 0|3|0|232|3|13|0|16|0|120|173|5|4|203|0|0
+Manticore | 0|3|0|232|3|14|0|16|0|120|173|5|4|196|0|0
+Leman Russ | 0|3|0|232|3|20|0|16|0|120|173|5|4|202|0|0
+Baneblade | 0|3|0|232|3|21|0|16|0|120|173|5|4|199|0|0
+Kasrkin Squad | 0|3|0|232|3|22|0|16|0|120|173|5|4|194|0|0
+
 
 # Wargear Purchases
 ## Eldar
