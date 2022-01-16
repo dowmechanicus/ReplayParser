@@ -136,7 +136,13 @@ pub fn parse_ticks(
                 }
 
                 if actions.len() > 0 {
-                    for action in actions {
+                    for mut action in actions {
+                        // Retrieve the players name from the players vector and
+                        // associate it with the action.
+                        if let Chunk::Player(player) = &replay.players[action.player_id as usize] {
+                            action.player_name = player.name.to_string();
+                        };
+
                         match &action.details {
                             ActionType::BuildUnit(..) => replay.actions.push(action),
                             ActionType::UpgradeBuilding(..) => replay.actions.push(action),

@@ -20,6 +20,7 @@ pub struct Action {
     pub action_id: u8,
     pub name: String,
     pub player_id: u8,
+    pub player_name: String,
     pub source: u8,
     pub data: Vec<u8>,
     pub context: (u8, u8),
@@ -38,6 +39,7 @@ impl<'a> From<ActionData<'a>> for Action {
             action_id: data[1],
             name: action_name,
             player_id: data[3] - 0xE8,
+            player_name: String::new(),
             source: data[7],
             data: data.clone(),
             meta: vec![],
@@ -59,6 +61,7 @@ impl Serialize for Action {
         state.serialize_field("action_id", &self.action_id)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("player_id", &self.player_id)?;
+        state.serialize_field("player_name", &self.player_name)?;
         state.serialize_field("source", format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str())?;
         state.serialize_field("data", serde_json::to_string(&self.data).unwrap().as_str())?;
         state.serialize_field(
