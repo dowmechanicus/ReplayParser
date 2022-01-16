@@ -153,6 +153,21 @@ D-Cannon | 0|3|0|232|3|5|0|16|0|120|173|5|4|143|0|0
 Avatar | 0|3|0|232|3|6|0|16|0|120|173|5|4|145|0|0
 Seer Council | 0|3|0|232|3|7|0|16|0|120|173|5|4|147|0|0
 
+## Space Marines
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Scouts | 0|3|0|232|3|0|0|16|0|120|173|5|4|219|0|0
+Tactical Marines | 0|3|0|232|3|1|0|16|0|120|173|5|4|221|0|0
+Devastators | 0|3|0|232|3|2|0|16|0|120|173|5|4|216|0|0
+Assault Marines | 0|3|0|232|3|3|0|16|0|120|173|5|4|215|0|0
+Plasma Devastators | 0|3|0|232|3|9|0|16|0|120|173|5|4|217|0|0
+Dreadnought | 0|3|0|232|3|10|0|16|0|120|173|5|4|225|0|0
+Razorback | 0|3|0|232|3|11|0|16|0|120|173|5|4|228|0|0
+Librarian | 0|3|0|232|3|12|0|16|0|120|173|5|4|218|0|0
+Whirlwind | 0|3|0|232|3|17|0|16|0|120|173|5|4|230|0|0
+Predator Tank | 0|3|0|232|3|19|0|16|0|120|173|5|4|227|0|0
+Landraider Redeemer | 0|3|0|232|3|20|0|16|0|120|173|5|4|226|0|0
+
 # Wargear Purchases
 ## Eldar
 ### Farseer
