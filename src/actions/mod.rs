@@ -59,22 +59,24 @@ impl Serialize for Action {
     {
         let mut state = serializer.serialize_struct("Action", 6)?;
         state.serialize_field("tick", &self.tick)?;
-        state.serialize_field("meta", serde_json::to_string(&self.meta).unwrap().as_str())?;
         state.serialize_field("timestamp", ticks2time(&self.tick).as_str())?;
         state.serialize_field("action_id", &self.action_id)?;
         state.serialize_field("name", &self.name)?;
         state.serialize_field("player_id", &self.player_id)?;
         state.serialize_field("player_name", &self.player_name)?;
-        state.serialize_field(
-            "source",
-            format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str(),
-        )?;
-        state.serialize_field("data", serde_json::to_string(&self.data).unwrap().as_str())?;
-        state.serialize_field(
-            "context",
-            serde_json::to_string(&self.context).unwrap().as_str(),
-        )?;
         state.serialize_field("details", &self.details)?;
+        if cfg!(debug_assertions) {
+            state.serialize_field("meta", serde_json::to_string(&self.meta).unwrap().as_str())?;
+            state.serialize_field(
+                "source",
+                format!("{:#X} ({})", &self.source, &self.get_source_name()).as_str(),
+            )?;
+            state.serialize_field("data", serde_json::to_string(&self.data).unwrap().as_str())?;
+            state.serialize_field(
+                "context",
+                serde_json::to_string(&self.context).unwrap().as_str(),
+            )?;
+        }
         state.end()
     }
 }
