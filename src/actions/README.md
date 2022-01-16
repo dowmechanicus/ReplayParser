@@ -9,8 +9,8 @@ Nr.  | TYPE  | LENGTH  | Description
 5|  BYTE|  1|    Unknown<br>Values that have been observed so far [u8]: 3
 6-7|  BYTE|  2|  A counter for the actions performed by this player. (confirmed)<br> Starts at 0. This means there is a limit of 65536.<br> Best read as u16 LittleEndian
 8|  BYTE|  1| 0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)<br> 0x20 = unit upgrades, movement<br>0x42 = was spotted with action code 56<br>0x44 = was spotted with action code 56<br>0x0  = seems related to power nodes and placeable entities (Turret, Mines)<br>(seems like any action performed by HQ like building or setting rally point is 10 while every action performed by a unit is 20<br>Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20), 66 (0x42), 68 (0x44)
-9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 93
-10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.<br> Is this the player location/ID?<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 120, 195<br>Values that have been observed so far [u8] additionally: 122
+9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 1, 93
+10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. This is most likely the player location/building/unit id<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 88, 120, 169, 179, 195<br> Values that have been observed so far [u8] in 2v2: 195, 202<br> Values that have been observed so far [u8] in 3v3: 0, 3, 195<br>Values that have been observed so far [u8] additionally: 122
 11| BYTE|  1| Most likely the unit identifier. But how/where is it assigned?
 12-13| BYTE| 2 | Seems to provide more context for the action (see general observations)
 14| BYTE|  1| Identifier for e.g. wargear, unit, global ability.<br><br>When building a power node this has been observed to be 107<br> When building a generator this has been observed to be 98<br>When using global abilities this has been observed to be 115, 123, 125, 124, 119
