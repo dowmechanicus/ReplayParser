@@ -26,6 +26,18 @@ impl<'a> From<ActionData<'a>> for BuildingAction {
 
 fn get_building_by_item_id(id: u8) -> &'static str {
     match id {
+        82 => "Tyranids HQ (Tier 2)",
+        83 => "Tyranids HQ (Tier 3)",
+        190 => "Space Marines HQ (Tier 2)",
+        191 => "Space Marines HQ (Tier 3)",
+        20 => "Orks HQ (Tier 2)",
+        21 => "Orks HQ (Tier 3)",
+        52 => "Imperial Guard HQ (Tier 2)",
+        54 => "Imperial Guard HQ (Tier 3)",
+        40 => "Chaos Space Marines HQ (Tier 2)",
+        41 => "Chaos Space Marines HQ (Tier 3)",
+        124 => "Eldar HQ (Tier 2)",
+        125 => "Eldar HQ (Tier 3)",
         107 | 192 => "Power Node",
         98 | 189 => "Power Generator",
         _ => "Unknown building"
