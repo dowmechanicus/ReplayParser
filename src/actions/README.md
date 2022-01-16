@@ -49,7 +49,7 @@ Nr.  | TYPE  | LENGTH  | Description
 # Global Abilities
 ## Space Marines (Techmarine, Apothecary, Force Commander)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Blessing of the Omnissiah | 0| 85| 1| 233| 3| 0| 0| 0| 0| 3| 233| 25| 5| 115| 3| 0| 0
 Drop Pod | 0| 85| 1| 233| 3| 1| 0| 0| 0| 3| 233| 26| 19| 123| 3| 0| 0| 1| 0| 2| 74| 75| 68| 193| 72|5| 210| 66| 126| 168| 37
@@ -69,7 +69,7 @@ Orbital Bombardement | 0|85|0|232|3|23|0|0|0|3|232|28|59|119|3|0|0|1|0|2|182|98|
 
 ## Eldar (Warlock, WSE, Farseer)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Webway Gate | 0|78|1|233|3|2|0|0|0|3|233|15|35|198|1|0|0|54|10|136|193|86|236|209|66|211|70|37|67|54|10|136|193|86|236|209|66|211|70|38|67|0|0|0|0|0|0
 Swift Movement | 0|85|1|233|3|3|0|0|0|3|233|25|5|197|1|0|0
@@ -89,7 +89,7 @@ Eldritch Storm | 0|85|0|232|3|6|0|0|0|3|232|26|19|201|1|0|0|1|0|2|248|246|73|193
 
 # Unit Abilities
 ## Space Marines
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tacs activate Kraken Rounds | 0|53|1|233|3|6|0|32|0|195|85|25|5|164|3|0|0
 Scouts cloaking | 0|53|1|233|3|7|0|32|0|195|83|25|5|143|3|0|0
@@ -101,14 +101,14 @@ FC toggle on halo | 0|53|1|233|3|12|0|32|0|195|82|25|5|109|3|0|0
 FC toggle off halo | 0|53|1|233|3|13|0|32|0|195|82|25|5|109|3|0|0
 
 ## Eldar
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Farseer Fleet of Foot | 0|53|1|233|3|8|0|32|0|195|86|25|5|173|1|0|0
 Farseer Guide | 0|53|1|233|3|9|0|32|0|195|86|26|9|182|1|0|0|1|0|4|87
 
 # Unit Purchases
 ## Eldar
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Dire Avengers | 0|3|1|233|3|0|0|16|0|120|180|5|4|141|0|0
 Howling Banshees | 0|3|1|233|3|1|0|16|0|120|180|5|4|137|0|0
@@ -128,7 +128,7 @@ Seer Council | 0|3|0|232|3|7|0|16|0|120|173|5|4|147|0|0
 # Wargear Purchases
 ## Eldar
 ### Farseer
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Doombringer |0|50|1|233|3|2|0|32|0|195|86|5|4|192|0|0
 Fortune Armor | 0|50|1|233|3|3|0|32|0|195|86|5|4|184|0|0
@@ -141,7 +141,7 @@ Asuryan Armor | 0|50|1|233|3|11|0|32|0|195|86|5|4|183|0|0
 Runes of Reaping | 0|50|1|233|3|12|0|32|0|195|86|5|4|174|0|0
 
 ### Warpspider Exarch
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Heavy Gauge Death Spinner | 0|50|1|233|3|2|0|32|0|195|86|5|4|195|0|0
 Improved Warp Generator | 0|50|1|233|3|4|0|32|0|195|86|5|4|190|0|0
@@ -154,7 +154,7 @@ Phase Armor | 0|50|1|233|3|16|0|32|0|195|86|5|4|191|0|0
 Anti-Grav Grenade | 0|50|1|233|3|18|0|32|0|195|86|5|4|180|0|0
 
 ### Warlock
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Immolator | 0|50|0|232|3|2|0|32|0|195|84|5|4|198|0|0
 Champion's Robe | 0|50|0|232|3|3|0|32|0|195|84|5|4|186|0|0
@@ -171,7 +171,7 @@ Falochu's Wing | 0|50|0|232|3|16|0|32|0|195|84|5|4|177|0|0
 
 ## Nodes + Generators
 ### Nodes
-1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 0|78|0|232|3|7|0|0|0|3|232|15|35|111|2|0|0|38|200|225,66,0,0,72,66,37,216,220,66,38,200,227,66,0,0,72,66,37,216,220,66,0,25,41,0,0,0
 0|78|3|235|3|27|0|0|0|3|235|15|35|111|2|0|0|0|0|198,194,0,0,72,66,0,0,210,66,0,0,196,194,0,0,72,66,0,0,210,66,0,15,41,0,0,0
@@ -181,14 +181,14 @@ Falochu's Wing | 0|50|0|232|3|16|0|32|0|195|84|5|4|177|0|0
 0|78|4|236|3|216|0|0|0|3|236|15|35|36|2|0|0|0|0|128,63,0,0,72,66,0,0,128,191,0,0,0,64,0,0,72,66,0,0,128,191,0,199,52,0,0,0
 
 ### Generators
-1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 0|78|128|232|3|41|0|0|0|3|232|15|35|102|2|0|0|0|0|225,66,0,0,72,66,0,0,205,66,0,0,227,66,0,0,72,66,0,0,205,66,0,13,55,0,0,0
 0|78|128|232|3|42|0|0|0|3|232|15|35|102|2|0|0|0|0|225,66,0,0,72,66,0,0,205,66,0,0,227,66,0,0,72,66,0,0,205,66,0,13,55,0,0,0
 0|78|132|236|3|0|1|0|0|3|236|15|35|31|2|0|0|0|0|208,192,0,0,72,66,0,0,0,191,0,0,176,192,0,0,72,66,0,0,0,191,0,66,61,0,0,0
 
 ## Eldar
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|124|0|0
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|125|0|0
@@ -196,14 +196,14 @@ Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|125|0|0
 
 ## Ordo Malleus
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|0|232|3|1|0|16|0|120|173|5|4|190|1|0
 
 
 ## Chaos Space Marines
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|185|5|4|40|0|0 
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|185|5|4|41|0|0 
@@ -211,7 +211,7 @@ Tier 3 | 0|15|1|233|3|1|0|16|0|120|185|5|4|41|0|0
 
 ## Imperial Guard
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|52|1|0
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|54|1|0
@@ -219,7 +219,7 @@ Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|54|1|0
 
 ## Orks
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|20|2|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|21|2|0
@@ -227,7 +227,7 @@ Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|21|2|0
 
 ## Space Marines
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|190|1|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|191|1|0
@@ -235,7 +235,7 @@ Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|191|1|0
 
 ## Tyranids
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
+Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
 -|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|82|2|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|83|2|0
