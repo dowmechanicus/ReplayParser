@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::File;
+use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 use std::path::Path;
-use std::io::{self, Read, Seek, SeekFrom, Cursor, Error, ErrorKind};
 
 extern crate byteorder;
 extern crate serde;
@@ -10,9 +10,9 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate crypto;
 
-use byteorder::{ReadBytesExt, LittleEndian};
-use crypto::md5::Md5;
+use byteorder::{LittleEndian, ReadBytesExt};
 use crypto::digest::Digest;
+use crypto::md5::Md5;
 
 mod chunky;
 use chunky::Chunk;
@@ -22,10 +22,11 @@ use chunky::Player as PlayerChunk;
 mod action;
 use action::*;
 
+mod identifiers;
+use identifiers::*;
+
 const TICK_ACTION: u32 = 0;
 const TICK_CHATMSG: u32 = 1;
-
-
 
 #[derive(Serialize)]
 pub struct Message {
@@ -35,7 +36,7 @@ pub struct Message {
     body: String,
 }
 
-#[derive(Default,Serialize)]
+#[derive(Default, Serialize)]
 pub struct ReplayInfo {
     name: String,
     mod_chksum: u32,
@@ -48,7 +49,7 @@ pub struct ReplayInfo {
     players: Vec<Chunk>,
     observers: Vec<Chunk>,
     messages: Vec<Message>,
-    actions: Vec<ActionTick>
+    actions: Vec<Action>,
 }
 
 fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
@@ -98,16 +99,18 @@ fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     //let file_format = String::from_utf8(buf).unwrap_or("".to_string());
 
     cursor.seek(SeekFrom::Current(24))?;
-    
+
     parse_chunks(&mut cursor, &mut replay, len)?;
     parse_ticks(&mut cursor, &mut replay, len)?;
 
     Ok(replay)
 }
 
-fn parse_chunks(mut cursor: &mut Cursor<Vec<u8>>,
-                mut replay: &mut ReplayInfo,
-                pos: u64) -> Result<(), io::Error> {
+fn parse_chunks(
+    mut cursor: &mut Cursor<Vec<u8>>,
+    mut replay: &mut ReplayInfo,
+    pos: u64,
+) -> Result<(), io::Error> {
     chunky::parse(&mut cursor)?;
     if let Chunk::Data(DataChunk { duration }) = chunky::parse(&mut cursor)? {
         replay.ticks = duration;
@@ -121,13 +124,12 @@ fn parse_chunks(mut cursor: &mut Cursor<Vec<u8>>,
         }
 
         match chunky::parse(&mut cursor)? {
-               Chunk::Empty { .. }      => (),
-               Chunk::FoldInfo { size } => endpos = cursor.position() +
-                                                    size as u64,
-               Chunk::Data(DataChunk { duration }) => replay.ticks = duration,
-            c@ Chunk::Map { .. }        => replay.map = c,
-            c@ Chunk::Game { .. }       => replay.game = c,
-            c@ Chunk::Player { .. }     => { 
+            Chunk::Empty { .. } => (),
+            Chunk::FoldInfo { size } => endpos = cursor.position() + size as u64,
+            Chunk::Data(DataChunk { duration }) => replay.ticks = duration,
+            c @ Chunk::Map { .. } => replay.map = c,
+            c @ Chunk::Game { .. } => replay.game = c,
+            c @ Chunk::Player { .. } => {
                 if let Chunk::Player(PlayerChunk { kind, .. }) = c {
                     if kind == 2 || kind == 5 {
                         replay.observers.push(c)
@@ -141,9 +143,11 @@ fn parse_chunks(mut cursor: &mut Cursor<Vec<u8>>,
 
     Ok(())
 }
-fn parse_ticks(mut cursor: &mut Cursor<Vec<u8>>,
-               mut replay: &mut ReplayInfo,
-               pos: u64) -> Result<(), io::Error> {
+fn parse_ticks(
+    mut cursor: &mut Cursor<Vec<u8>>,
+    mut replay: &mut ReplayInfo,
+    pos: u64,
+) -> Result<(), io::Error> {
     let mut current_tick = 0;
     let mut md5 = Md5::new();
 
@@ -156,24 +160,26 @@ fn parse_ticks(mut cursor: &mut Cursor<Vec<u8>>,
         let _tick_size = cursor.read_u32::<LittleEndian>()?;
 
         match tick_type {
-            TICK_ACTION  => {
-                let action = parse_action(&mut cursor)?;
-                if action.tick > 0 { current_tick = action.tick }
-                //md5.input(action.data.as_slice());
-                if action.actions.len() > 0 {
-                    replay.actions.push(action);
+            TICK_ACTION => {
+                let actions = parse_action(&mut cursor)?;
+                if actions.len() > 0 {
+                    for action in actions {
+                        if action.tick > 0 {
+                            current_tick = action.tick
+                        }
+                        replay.actions.push(action);
+                    }
                 }
             }
             TICK_CHATMSG => {
                 let msg = parse_message(&mut cursor, current_tick)?;
                 replay.messages.push(msg);
             }
-            _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action"))
+            _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action")),
         };
     }
 
     replay.md5 = md5.result_str();
-    println!("{}", replay.md5);
 
     Ok(())
 }
@@ -189,27 +195,26 @@ fn parse_ticks(mut cursor: &mut Cursor<Vec<u8>>,
 /// * DWORD [4 bytes] = Unknown. Varies with every action tick.
 /// * DWORD [4 bytes] = The amount of player actions bundles in this tick.
 ///
-fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<ActionTick, io::Error> {
+fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<Vec<Action>, io::Error> {
     // Always the same
     cursor.seek(SeekFrom::Current(1))?;
-    
+
     // The number of the current tick
     let tick = cursor.read_u32::<LittleEndian>()?;
-    
+
     // Skip reading another counter and the unknown field...
     cursor.seek(SeekFrom::Current(8))?;
-    
+
     let mut action_bundle = vec![];
-    
+
     // ...and continue with the amount player actions bundles in this tick
     let nactions = cursor.read_u32::<LittleEndian>()?;
-    
+
     for _ in 0..nactions {
-        // let mut actions = Vec::new();
         // Player Action Bundle Shared Header
         // We don't know what the next to DWORDs contain, so we skip them
         cursor.seek(SeekFrom::Current(8))?;
-        
+
         // The remaining size of the action bundle + 1
         let mut bytes_remain = cursor.read_u32::<LittleEndian>()?;
         // Header End
@@ -218,48 +223,48 @@ fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<ActionTick, io::Error> {
             // Total length of player actions in bytes.
             // DO NOT USE THIS VALUE AS THE REMAINING LENGTH (it is limited to 1 byte).
             cursor.seek(SeekFrom::Current(1))?;
-            
+
             // Length of the next action block in bytes included this byte
             let action_size = cursor.read_u8()?;
-            
-            let mut buf = vec![0; (action_size-2) as usize];
+
+            let mut buf = vec![0; (action_size - 2) as usize];
             cursor.read_exact(&mut buf)?;
 
             let mut action = Action::default();
             action.append_data(&mut buf);
-            action.set_size(action_size);
 
-            // Get action type
-            action.set_action_type();
-            action_bundle.push(action);
+            // Set tick at which action occured
+            action.tick = tick;
+
+            // For now we only want unit purchases, upgrades or cancellations thereof
+            // Same goes for wargears and tier upgrades
+            // Maybe for later: APM could be derived from the total number of actions
+            if let 3 | 5 | 15 | 47 | 50 | 51 = action.action_type {
+                action_bundle.push(action);
+            } else {
+                ();
+            }
 
             bytes_remain -= action_size as u32;
         }
         cursor.seek(SeekFrom::Current(1))?;
     }
 
-    // println!("tick: {}, actions: {:?}", tick, actions);
-
-    Ok(ActionTick {
-        tick: tick,
-        number_of_actions: nactions,
-        actions: action_bundle,
-    })
+    Ok(action_bundle)
 }
 
-fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32)
-                 -> Result<Message, io::Error> {
+fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
     cursor.seek(SeekFrom::Current(8))?;
-    let sender = chunky::read_vstring_utf16(&mut cursor); 
+    let sender = chunky::read_vstring_utf16(&mut cursor);
     cursor.seek(SeekFrom::Current(4))?;
     let kind = cursor.read_u32::<LittleEndian>()?;
     let local = cursor.read_u32::<LittleEndian>()?;
-    let body = chunky::read_vstring_utf16(&mut cursor); 
+    let body = chunky::read_vstring_utf16(&mut cursor);
 
     let receiver = match local {
         1 if kind == 1 => "observers".to_string(),
         1 if kind != 1 => "team".to_string(),
-        _ => "all".to_string()
+        _ => "all".to_string(),
     };
 
     Ok(Message {
@@ -282,14 +287,7 @@ fn main() {
         };
         let json = serde_json::to_string_pretty(&replay).unwrap();
         println!("{}", json);
-        // for action_tick in replay.actions.iter() {
-        //     for action in &action_tick.actions {
-        //         println!("{}", action);
-        //     }
-        // }
-
     } else {
         println!("must supply a file");
     }
 }
-
