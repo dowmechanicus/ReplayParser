@@ -23,34 +23,15 @@ mod action;
 use action::*;
 
 mod identifiers;
-use identifiers::*;
+
+mod replay;
+use replay::ReplayInfo;
+
+mod message;
+use message::Message;
 
 const TICK_ACTION: u32 = 0;
 const TICK_CHATMSG: u32 = 1;
-
-#[derive(Serialize)]
-pub struct Message {
-    tick: u32,
-    sender: String,
-    receiver: String,
-    body: String,
-}
-
-#[derive(Default, Serialize)]
-pub struct ReplayInfo {
-    name: String,
-    mod_chksum: u32,
-    mod_version: u32,
-    md5: String,
-    date: String,
-    ticks: u32,
-    game: Chunk,
-    map: Chunk,
-    players: Vec<Chunk>,
-    observers: Vec<Chunk>,
-    messages: Vec<Message>,
-    actions: Vec<Action>,
-}
 
 fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
     let mut file = File::open(path)?;
