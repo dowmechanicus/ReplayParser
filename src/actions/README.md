@@ -45,6 +45,34 @@ Nr.  | TYPE  | LENGTH  | Description
 - Canceling a unit purchase functions like clearing an item from an array without removing the item itself ("nulling" instead of delete). There exists an internal counter that keeps track of each distinct purchase
   even if the same unit is purchases and immediately cancelled. That will still cause the counter to increment.
 
+# Action Types
+- 1 => Ability on placeable object
+- 3 => Build unit
+- 5 => Cancel unit or wargear
+- 9 => Unknown // source: 0x10
+- 11 => Set rally point
+- 15 => Upgrade building
+- 23 => Exit building
+- 43 => Stop move
+- 44 => Move
+- 47 => Capture point
+- 48 => Attack
+- 49 => Reinforce unit
+- 50 => Purchase wargear
+- 51 => Cancel wargear purchase
+- 52 => Attack move
+- 53 => Ability on unit
+- 56 => Enter building or vehicle
+- 58 => Exit vehicle
+- 61 => Retreat
+- 70 => Force melee
+- 71 => Toggle stance
+- 78 => Place building
+- 85 => Global ability
+- 89 => Unknown
+- 94 => Unknown // source 0x0
+- 96 => Unknown // source 0x0
+- 98 => Unknown // source 0x0
 
 # Global Abilities
 ## Space Marines (Techmarine, Apothecary, Force Commander)
