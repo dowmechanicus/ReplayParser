@@ -12,7 +12,7 @@ Nr.  | TYPE  | LENGTH  | Description
 9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 93
 10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. But sometimes changes between different games.<br> Is this the player location/ID?<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 195<br>Values that have been observed so far [u8] additionally: 122
 11-12| BYTE|  2| Most likely the unit identifier. But how/where is it assigned?<br>When building power nodes and generators this has been observed to be (232, 15)
-13-14| BYTE|  2| Always the same? It seems so.<br>When building a power node this has been observed to be (35, 107)<br> When building a generator this has been observed to be (35, 98)
+13-14| BYTE|  2| Always the same? It seems so.<br>When building a power node this has been observed to be (35, 107)<br> When building a generator this has been observed to be (35, 98)<br>When using global abilities this has been observed to be (5,115), (19,123), (19,125), (19,124), (59,119)
 15-19| DWORD| 4| Identifier for the item (unit, upgrade, wargear)<br>See the item codes file for these values<br><br>Identifier for the canceled unit, upgrade, wargear<br>These are numbered in the order they are queued.<br>Units and Base Tiers share the same numbering.<br> Wargear is on a different ordering.<br> Upgrades have a different ordering for every unit. These actions are numbered: upgrades (0x30) and unknown (0x2E)
 
 
@@ -25,4 +25,64 @@ Nr.  | TYPE  | LENGTH  | Description
 
 - Unit id (once unit is on the field) is not the same as the unit/item id when its purchased at the HQ
 
+- Action data fields 12 + 13 seem to decode the following (amongs other stuff):
+  - (15, 35) => Single target, building (e.g. Webway Gate)
+  - (25, 5) => Non-targettable, affects every target-type at once (e.g. Angels of Death, Blessing of the Omnissiah, Swift Movement) or is called in at base (e.g. Seer Council)
+  - (26, 19) => Single target with no secondary projectiles (e.g. Drop Pod, Terminators, Eldritch Storm)
+  - (28, 59) => Multiple targets but no unit call-in (e.g. Orbital Bombardement)
+  - (28, 71) => Multiple targets and unit call-in (e.g. Autarch)
 
+
+# Global Abilities
+## Space Marines (Techmarine, Apothecary, Force Commander)
+
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Blessing of the Omnissiah | 0| 85| 1| 233| 3| 0| 0| 0| 0| 3| 233| 25| 5| 115| 3| 0| 0
+Drop Pod | 0| 85| 1| 233| 3| 1| 0| 0| 0| 3| 233| 26| 19| 123| 3| 0| 0| 1| 0| 2| 74| 75| 68| 193| 72|5| 210| 66| 126| 168| 37
+Venerable Dreadnought | 0| 85| 1| 233| 3| 4| 0| 0| 0| 3| 233| 26| 19| 125| 3| 0| 0| 1| 0| 2| 90| 174| 28| 65| 51| 243| 209| 66| 100| 222| 42
+Terminator Call-in |0| 85| 1| 233| 3| 5| 0| 0| 0| 3| 233| 26| 19| 124| 3| 0| 0| 1| 0| 2| 152| 31| 118| 64| 96| 111| 208| 66| 65| 114| 31
+Orbital Bombardement | 0| 85| 1| 233| 3| 6| 0| 0| 0| 3| 233| 28| 59| 119| 3| 0| 0| 1| 0| 2| 12| 192| 220| 192| 58| 250| 209| 66| 229| 136| 254| 66| 2| 198| 116| 30| 65| 54| 139| 208| 66| 232| 162| 242| 66| 2| 128| 5| 29| 62| 113| 165| 203| 66| 228| 233| 217| 66| 2| 77| 154| 140| 193| 230| 2| 204| 66| 148| 187| 239| 66
+Larramans Blessing | 0|85|1|233|3|2|0|0|0|3|233|25|5|121|3|0|0
+Drop Pod | 0|85|1|233|3|3|0|0|0|3|233|26|19|123|3|0|0|1|0|2|248|94|99|193|16|29|210|66|206|62|38
+Angels of Death | 0|85|1|233|3|4|0|0|0|3|233|25|5|114|3|0|0
+Terminator Call-in | 0|85|1|233|3|5|0|0|0|3|233|26|19|124|3|0|0|1|0|2|42|238|65|65|50|243|209|66|67|252|40
+Orbital Bombardement | 0|85|1|233|3|6|0|0|0|3|233|28|59|119|3|59|119|3|0|0|1|0|2|0|30|115|189|22|77|209|66|24|59|4|67|2|0|30|115|189|22|77|209|66|24|59|4|67|2|0|189|54|63|9|21|209|66|117|205|3|67|2|0|252|45|189|22|77|209|66|159|129|4|67
+For the Emperor | 0|85|0|232|3|2|0|0|0|3|232|26|9|117|3|0|0|1|0|4|84
+Drop Pod | 0|85|0|232|3|3|0|0|0|3|232|26|19|123|3|0|0|1|0|2|16|16|2|194|51|220|210|66|101|95|44
+Assault Terminators | 0|85|0|232|3|4|0|0|0|3|232|26|19|122|3|0|0|1|0|2|174|243|136|193|41|220|210|66|39|120|41
+Ranged Terminators | 0|85|0|232|3|21|0|0|0|3|232|26|19|124|3|0|0|1|0|2|52|152|37|193|0|0|180|66|214|222|150
+Orbital Bombardement | 0|85|0|232|3|23|0|0|0|3|232|28|59|119|3|0|0|1|0|2|182|98|104|66|44|185|191|66|146|253|30|194|2|182|98|104|66|44|185|191|66|146|253|30|194|2|182|98|104|66|44|185|191|66|146|253|30|194|2|151|124|104|66|10|236|191|66|118|23|31|194
+
+## Eldar (Warlock, WSE, Farseer)
+
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Webway Gate | 0|78|1|233|3|2|0|0|0|3|233|15|35|198|1|0|0|54|10|136|193|86|236|209|66|211|70|37|67|54|10|136|193|86|236|209|66|211|70|38|67|0|0|0|0|0|0
+Swift Movement | 0|85|1|233|3|3|0|0|0|3|233|25|5|197|1|0|0
+Distort Field | 0|85|1|233|3|4|0|0|0|3|233|26|9|199|1|0|0|1|0|4|86
+Autarch Drop | 0|85|1|233|3|5|0|0|0|3|233|28|71|205|1|0|0|1|0|2|132|130|77|65|65|230|209|66|238|79|38|67|2|96|247|232|64|204|11|209|66|185|40|34|67|2|216|235|88|64|142|157|208|66|251|182|32|67|2|64|188|88|191|192|157|208|66|189|175|32|67|2|28|89|150|192|140|230|208|66|252|39|34
+Eldritch Storm | 0|85|1|233|3|6|0|0|0|3|233|26|19|201|1|0|0|1|0|2|220|244|156|64|120|27|208|66|17|190|12
+Webway Gate | 0|78|1|233|3|2|0|0|0|3|233|15|35|198|1|0|0|250|168|131|193|154|236|209|66|95|52|38|67|250|168|131|193|154|236|209|66|95|52|39|67|0|0|0|0|0|0
+Crackshot | 0|85|1|233|3|3|0|0|0|3|233|26|9|198|1|0|0|1|0|4|87
+Warpspider Call-in | 0|85|1|233|3|4|0|0|0|3|233|26|19|208|1|0|0|1|0|2|144|136|76|65|106|233|209|66|190|147|38
+Autarch | 0|85|1|233|3|5|0|0|0|3|233|28|71|205|1|0|0|1|0|2|24|81|206|64|246|134|209|134|209|66|36|129|35|67|2|240|170|246|64|61|37|208|66|248|46|25|67|2|144|25|23|64|71|32|208|66|19|81|23|67|2|240|153|43|192|2|64|208|66|128|75|24|67|2|40|119|247|192|6|171|208|66|136|140|29
+Eldritch Storm | 0|85|1|233|3|6|0|0|0|3|233|26|19|201|1|0|0|1|0|2|56|143|35|64|169|139|205|66|18|196|246
+Webway Gate | 0|78|0|232|3|2|0|0|0|3|232|15|35|198|1|0|0|112|54|26|194|42|220|210|66|14|122|41|195|112|54|26|194|42|220|210|66|14|122|40|195|0|0|0|0|0|0
+Farsight | 0|85|0|232|3|3|0|0|0|3|232|26|19|204|1|0|0|1|0|2|0|184|204|62|157|240|208|66|72|225|34
+Autarch | 0|85|0|232|3|4|0|0|0|3|232|28|71|206|1|0|0|1|0|2|226|10|170|193|22|220|210|66|20|45|31|195|2|41|16|137|193|47|220|210|66|255|99|30|195|2|154|28|118|193|250|219|210|66|85|172|29|195|2|104|196|58|193|218|219|210|66|150|131|31|195|2|56|81|55|193|201|219|210|66|228|109|31
+Seer Council | 0|85|0|232|3|5|0|0|0|3|232|25|5|207|1|0|0
+Eldritch Storm | 0|85|0|232|3|6|0|0|0|3|232|26|19|201|1|0|0|1|0|2|248|246|73|193|55|132|207|66|226|131|6
+
+# Unit Abilities
+## Space Marines
+Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|11|12|13|14|15|16|17|18|19|20
+-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Tacs activate Kraken Rounds | 0|53|1|233|3|6|0|32|0|195|85|25|5|164|3|0|0
+Scouts cloaking | 0|53|1|233|3|7|0|32|0|195|83|25|5|143|3|0|0
+Scouts uncloaking | 0|53|1|233|3|8|0|32|0|195|83|25|5|143|3|0|0
+Scouts throw grenade | 0|53|1|233|3|9|0|32|0|195|83|26|19|144|3|0|0|1|0|2|59|226|160|66|0|0|200|66|120|215|161
+FC battlecry | 0|53|1|233|3|10|0|32|0|195|82|25|5|107|3|0|0
+FC alacrity | 0|53|1|233|3|11|0|32|0|195|82|25|5|110|3|0|0
+FC toggle on halo | 0|53|1|233|3|12|0|32|0|195|82|25|5|109|3|0|0
+FC toggle off halo | 0|53|1|233|3|13|0|32|0|195|82|25|5|109|3|0|0

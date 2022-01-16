@@ -12,9 +12,6 @@ Move FC
 Move Scouts
 [{"data":[0,44,1,233,3,5,0,32,0,195,83,1,13,2,182,216,143,66,6,0,200,66,10,253,148],"size":27,"action_type":"move action"}]
 
-Tacs activate Kraken Rounds
-[{"data":[0,53,1,233,3,6,0,32,0,195,85,25,5,164,3,0,0],"size":19,"action_type":"ability"}]
-
 Scouts purchase shotguns
 [{"data":[0,50,1,233,3,0,0,32,0,195,83,5,4,218,1,0],"size":18,"action_type":"unknown action"}]
 
@@ -35,27 +32,6 @@ FC purchase halo
 
 SM go T2
 [{"data":[0,15,1,233,3,6,0,16,0,74,111,5,4,186,1,0],"size":18,"action_type":"Wargear and Tier upgrade"}]
-
-Scouts cloaking
-[{"data":[0,53,1,233,3,7,0,32,0,195,83,25,5,143,3,0,0],"size":19,"action_type":"ability"}]
-
-Scouts uncloaking
-[{"data":[0,53,1,233,3,8,0,32,0,195,83,25,5,143,3,0,0],"size":19,"action_type":"ability"}]
-
-Scouts throw grenade
-[{"data":[0,53,1,233,3,9,0,32,0,195,83,26,19,144,3,0,0,1,0,2,59,226,160,66,0,0,200,66,120,215,161],"size":33,"action_type":"ability"}]
-
-FC battlecry
-[{"data":[0,53,1,233,3,10,0,32,0,195,82,25,5,107,3,0,0],"size":19,"action_type":"ability"}]
-
-FC alacrity
-[{"data":[0,53,1,233,3,11,0,32,0,195,82,25,5,110,3,0,0],"size":19,"action_type":"ability"}]
-
-FC toggle on halo
-[{"data":[0,53,1,233,3,12,0,32,0,195,82,25,5,109,3,0,0],"size":19,"action_type":"ability"}]
-
-FC toggle off halo
-[{"data":[0,53,1,233,3,13,0,32,0,195,82,25,5,109,3,0,0],"size":19,"action_type":"ability"}]
 
 ###################################################################################################################
 
