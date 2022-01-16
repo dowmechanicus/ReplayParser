@@ -145,6 +145,7 @@ pub fn parse_ticks(
 
                         match &action.details {
                             ActionType::BuildUnit(..) => replay.actions.push(action),
+                            ActionType::CancelUnitOrWargear(..) => replay.actions.push(action),
                             ActionType::UpgradeBuilding(..) => replay.actions.push(action),
                             ActionType::UpgradeUnit(..) => replay.actions.push(action),
                             ActionType::PurchaseWargear(..) => replay.actions.push(action),
