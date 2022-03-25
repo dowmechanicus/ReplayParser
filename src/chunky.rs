@@ -24,7 +24,7 @@ pub struct Map {
     pub width: u32,
     pub height: u32,
 }
-#[derive(Default, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub struct Player {
     pub name: String,
     pub kind: u32,

@@ -9,6 +9,7 @@ use chunky::Player as PlayerChunk;
 use crate::message::Message;
 use crate::replay::ReplayInfo;
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
@@ -70,6 +71,8 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
 
     parse_chunks(&mut cursor, &mut replay, len)?;
     parse_ticks(&mut cursor, &mut replay, len)?;
+
+    match_player_ids_from_messages(&mut replay);
 
     Ok(replay)
 }
@@ -176,16 +179,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
     let tick = cursor.read_u32::<LittleEndian>()?;
 
     // Reading another counter and the unknown field...
-    let _meta = vec![
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-        cursor.read_u8()?,
-    ];
+    cursor.seek(SeekFrom::Current(8))?;
 
     let mut action_bundle = vec![];
 
@@ -194,7 +188,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
 
     for _ in 0..nactions {
         // Player Action Bundle Shared Header
-        // We don't know what the next to DWORDs contain, so we skip them
+        // Next 8 bytes seem to be always filled with 0
         cursor.seek(SeekFrom::Current(8))?;
 
         // The remaining size of the action bundle + 1
@@ -225,9 +219,17 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
 }
 
 pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
+    // Skip this data for now (we do not YET know what it contains)
     cursor.seek(SeekFrom::Current(8))?;
+    
+    // Derive the players name from the next chunk of data
     let sender = chunky::read_vstring_utf16(&mut cursor);
-    cursor.seek(SeekFrom::Current(4))?;
+
+    // Derive the player id from the next chunk of data
+    let player_id = cursor.read_u8()?;
+
+    cursor.seek(SeekFrom::Current(3))?;
+    
     let kind = cursor.read_u32::<LittleEndian>()?;
     let local = cursor.read_u32::<LittleEndian>()?;
     let body = chunky::read_vstring_utf16(&mut cursor);
@@ -239,9 +241,38 @@ pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Mess
     };
 
     Ok(Message {
-        tick: tick,
-        sender: sender,
-        receiver: receiver,
-        body: body,
+        tick,
+        sender,
+        receiver,
+        body,
+        player_id
     })
 }
+
+fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
+    let mut player_map = HashMap::new();
+    let mut relic_id_map = HashMap::new();
+
+    for message in replay.messages.iter() {
+        player_map.insert(message.player_id, message.sender.clone());
+    }
+
+    for player in replay.players.iter() {
+        if let Chunk::Player(p) = player {
+            relic_id_map.insert(&p.name, p.relic_id);
+        }
+    }
+
+    for action in replay.actions.iter_mut() {
+        match player_map.get(&action.data[3]) {
+            Some(id) => {
+                action.player = id.to_owned();
+                if let Some(relic_id) = relic_id_map.get(id) {
+                    action.relic_id = *relic_id;
+                }
+            },
+            _ => ()
+        };
+    }    
+}
+
