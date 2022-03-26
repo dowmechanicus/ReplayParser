@@ -33,7 +33,7 @@ impl Serialize for Action {
         state.serialize_field("relic_id", &self.relic_id)?;
         state.serialize_field("name", &self.player)?;
         state.serialize_field("tick", &self.tick)?;
-        state.serialize_field("data", serde_json::to_string(data).unwrap().as_str())?;
+        state.serialize_field("data", &data)?;
         state.end()
     }
 }
