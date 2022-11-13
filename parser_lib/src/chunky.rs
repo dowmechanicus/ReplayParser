@@ -175,15 +175,15 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let race = read_vstring(&mut cursor);
     let relic_id = cursor.read_u64::<LittleEndian>()?;
     let rank = cursor.read_u32::<LittleEndian>()?;
-    
+
     // These seem to be empty -> 0
     cursor.seek(SeekFrom::Current(4))?;
 
     let cpu = cursor.read_u32::<LittleEndian>()?;
     let hero = cursor.read_u32::<LittleEndian>()?;
-    
+
     cursor.seek(SeekFrom::Current(1))?;
-    
+
     // Rank again
     cursor.seek(SeekFrom::Current(4))?;
     // Primary
@@ -194,11 +194,11 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let trim_color = cursor.read_u8()?;
     // Accessory
     let accessory_color = cursor.read_u8()?;
-    
+
     cursor.seek(SeekFrom::Current(1))?;
-    
+
     let skin_path = read_vstring(&mut cursor);
-    
+
     // These seem to be empty. Probably padding for the strings.
     cursor.seek(SeekFrom::Current(4))?;
 

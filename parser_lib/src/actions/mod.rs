@@ -29,7 +29,11 @@ impl Serialize for Action {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("Action", 2)?;
-        let data = if *(&self.data.len()) > 20 as usize { &self.data[1..20]} else { &self.data[1..] };
+        let data = if *(&self.data.len()) > 20 as usize {
+            &self.data[1..20]
+        } else {
+            &self.data[1..]
+        };
         state.serialize_field("relic_id", &self.relic_id)?;
         state.serialize_field("name", &self.player)?;
         state.serialize_field("tick", &self.tick)?;
@@ -37,4 +41,3 @@ impl Serialize for Action {
         state.end()
     }
 }
-

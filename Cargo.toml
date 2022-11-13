@@ -1,12 +1,6 @@
-[package]
-name = "dow_replay_parser"
-version = "0.1.0"
-authors = ["Myrdal <myrdal@dawnofwar.info>"]
-edition = "2018"
+[workspace]
 
-[dependencies]
-byteorder = "1.4.3"
-serde = "1.0.10"
-serde_json = "1.0.2"
-serde_derive = "1.0.10"
-rust-crypto = "0.2.36"
+members = [
+  "parser",
+  "parser_lib"
+]

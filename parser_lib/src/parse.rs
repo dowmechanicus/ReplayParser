@@ -221,7 +221,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
 pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
     // Skip this data for now (we do not YET know what it contains)
     cursor.seek(SeekFrom::Current(8))?;
-    
+
     // Derive the players name from the next chunk of data
     let sender = chunky::read_vstring_utf16(&mut cursor);
 
@@ -229,7 +229,7 @@ pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Mess
     let player_id = cursor.read_u8()?;
 
     cursor.seek(SeekFrom::Current(3))?;
-    
+
     let kind = cursor.read_u32::<LittleEndian>()?;
     let local = cursor.read_u32::<LittleEndian>()?;
     let body = chunky::read_vstring_utf16(&mut cursor);
@@ -245,7 +245,7 @@ pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Mess
         sender,
         receiver,
         body,
-        player_id
+        player_id,
     })
 }
 
@@ -270,9 +270,8 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
                 if let Some(relic_id) = relic_id_map.get(id) {
                     action.relic_id = *relic_id;
                 }
-            },
-            _ => ()
+            }
+            _ => (),
         };
-    }    
+    }
 }
-
