@@ -11,7 +11,7 @@ extern crate crypto;
 mod chunky;
 mod message;
 mod parse;
-mod replay;
+pub mod replay;
 use parse::*;
 use replay::ReplayInfo;
 mod actions;
