@@ -1,3 +1,4 @@
+use color_eyre::Result;
 use std::path::Path;
 
 extern crate byteorder;
@@ -12,6 +13,7 @@ mod message;
 mod parse;
 mod replay;
 use parse::*;
+use replay::ReplayInfo;
 mod actions;
 
 pub fn parse_file(file_path: String) -> Option<String> {
@@ -25,4 +27,11 @@ pub fn parse_file(file_path: String) -> Option<String> {
     };
     let json = serde_json::to_string_pretty(&replay).unwrap();
     Some(json.clone())
+}
+
+pub fn parse_raw(file_path: String) -> Result<ReplayInfo> {
+    let path = Path::new(&file_path);
+    let replay_info = parse_replay(&path)?;
+
+    Ok(replay_info)
 }
