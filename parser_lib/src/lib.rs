@@ -8,13 +8,12 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate crypto;
 
-mod chunky;
-mod message;
-mod parse;
+pub mod chunky;
+pub mod actions;
+pub mod message;
 pub mod replay;
+mod parse;
 use parse::*;
-use replay::ReplayInfo;
-mod actions;
 
 pub fn parse_file(file_path: String) -> Option<String> {
     let path = Path::new(&file_path);
@@ -29,7 +28,7 @@ pub fn parse_file(file_path: String) -> Option<String> {
     Some(json.clone())
 }
 
-pub fn parse_raw(file_path: String) -> Result<ReplayInfo> {
+pub fn parse_raw(file_path: String) -> Result<replay::ReplayInfo> {
     let path = Path::new(&file_path);
     let replay_info = parse_replay(&path)?;
 

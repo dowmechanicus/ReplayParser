@@ -13,7 +13,7 @@ pub struct Game {
 pub struct Data {
     pub duration: u32,
 }
-#[derive(Default, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub struct Map {
     pub name: String,
     pub description: String,
