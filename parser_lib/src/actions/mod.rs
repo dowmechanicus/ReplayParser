@@ -29,7 +29,7 @@ impl Serialize for Action {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("Action", 2)?;
-        let data = if *(&self.data.len()) > 20 as usize {
+        let data = if self.data.len() > 20_usize {
             &self.data[1..20]
         } else {
             &self.data[1..]

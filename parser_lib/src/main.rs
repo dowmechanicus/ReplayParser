@@ -18,7 +18,7 @@ mod actions;
 fn main() {
     if let Some(arg) = env::args().nth(1) {
         let path = Path::new(&arg);
-        let replay = match parse_replay(&path) {
+        let replay = match parse_replay(path) {
             Ok(r) => r,
             Err(e) => {
                 println!("error: {}", e);

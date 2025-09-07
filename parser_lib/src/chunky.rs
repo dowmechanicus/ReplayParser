@@ -59,7 +59,7 @@ impl Default for Chunk {
     }
 }
 
-pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+pub fn parse(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let mut buf = vec![0; 8];
     cursor.read_exact(&mut buf)?;
     let chunk_name = String::from_utf8(buf).unwrap_or("".to_string());
@@ -74,10 +74,10 @@ pub fn parse(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(12))?;
 
     let result = match chunk_name.as_ref() {
-        "DATADATA" => parse_data(&mut cursor),
-        "DATASDSC" => parse_sdsc(&mut cursor),
-        "DATABASE" => parse_base(&mut cursor),
-        "DATAINFO" => parse_info(&mut cursor),
+        "DATADATA" => parse_data(cursor),
+        "DATASDSC" => parse_sdsc(cursor),
+        "DATABASE" => parse_base(cursor),
+        "DATAINFO" => parse_info(cursor),
         "FOLDINFO" => Ok(Chunk::FoldInfo { size: chunk_size }),
         "FOLDPOST" | "FOLDGPLY" => Ok(Chunk::Empty {}),
         _ => {
@@ -99,14 +99,14 @@ fn parse_data(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     }))
 }
 
-fn parse_sdsc(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+fn parse_sdsc(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(4))?;
-    let date = read_vstring_utf16(&mut cursor);
+    let date = read_vstring_utf16(cursor);
     cursor.seek(SeekFrom::Current(8))?;
-    let path = read_vstring(&mut cursor);
-    let name = read_vstring_utf16(&mut cursor);
-    let abbrname = read_vstring_utf16(&mut cursor);
-    let description = read_vstring_utf16(&mut cursor);
+    let path = read_vstring(cursor);
+    let name = read_vstring_utf16(cursor);
+    let abbrname = read_vstring_utf16(cursor);
+    let description = read_vstring_utf16(cursor);
     let maxplayers = cursor.read_u32::<LittleEndian>().unwrap();
     let width = cursor.read_u32::<LittleEndian>().unwrap();
     let height = cursor.read_u32::<LittleEndian>().unwrap();
@@ -114,18 +114,18 @@ fn parse_sdsc(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(12 + 4 + path.len() as i64))?;
 
     Ok(Chunk::Map(Map {
-        date: date,
-        path: path,
-        name: name,
-        abbrname: abbrname,
-        description: description,
-        maxplayers: maxplayers,
-        width: width,
-        height: height,
+        date,
+        path,
+        name,
+        abbrname,
+        description,
+        maxplayers,
+        width,
+        height,
     }))
 }
 
-fn parse_base(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let mut vpc = 0;
     let mut resources = String::new();
     let mut locations = String::new();
@@ -148,7 +148,7 @@ fn parse_base(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     }
 
     cursor.seek(SeekFrom::Current(1))?;
-    let name = read_vstring_utf16(&mut cursor);
+    let name = read_vstring_utf16(cursor);
     cursor.seek(SeekFrom::Current(4))?;
     let nconds = cursor.read_u32::<LittleEndian>()?;
     for _ in 0..nconds {
@@ -160,19 +160,19 @@ fn parse_base(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(12))?;
 
     Ok(Chunk::Game(Game {
-        name: name,
-        mode: mode,
-        resources: resources,
-        locations: locations,
+        name,
+        mode,
+        resources,
+        locations,
         victory_points: vpc,
     }))
 }
 
-fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
-    let name = read_vstring_utf16(&mut cursor);
+fn parse_info(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
+    let name = read_vstring_utf16(cursor);
     let kind = cursor.read_u32::<LittleEndian>()?;
     let team = cursor.read_u32::<LittleEndian>()?;
-    let race = read_vstring(&mut cursor);
+    let race = read_vstring(cursor);
     let relic_id = cursor.read_u64::<LittleEndian>()?;
     let rank = cursor.read_u32::<LittleEndian>()?;
 
@@ -197,12 +197,12 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
 
     cursor.seek(SeekFrom::Current(1))?;
 
-    let skin_path = read_vstring(&mut cursor);
+    let skin_path = read_vstring(cursor);
 
     // These seem to be empty. Probably padding for the strings.
     cursor.seek(SeekFrom::Current(4))?;
 
-    let skin_name = read_vstring_utf16(&mut cursor);
+    let skin_name = read_vstring_utf16(cursor);
     let id = cursor.read_u8()?;
     let tmp = cursor.read_u8()?;
     if tmp == 0 || tmp == 0xff {
@@ -210,21 +210,21 @@ fn parse_info(mut cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     }
 
     Ok(Chunk::Player(Player {
-        name: name,
-        kind: kind,
-        team: team,
-        race: race,
-        relic_id: relic_id,
-        rank: rank,
-        cpu: cpu,
-        hero: hero,
+        name,
+        kind,
+        team,
+        race,
+        relic_id,
+        rank,
+        cpu,
+        hero,
         primary_color,
         secondary_color,
         trim_color,
         accessory_color,
-        skin_path: skin_path,
-        skin_name: skin_name,
-        id: id,
+        skin_path,
+        skin_name,
+        id,
     }))
 }
 

@@ -8,16 +8,16 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate crypto;
 
-pub mod chunky;
 pub mod actions;
+pub mod chunky;
 pub mod message;
-pub mod replay;
 mod parse;
+pub mod replay;
 use parse::*;
 
 pub fn parse_file(file_path: String) -> Option<String> {
     let path = Path::new(&file_path);
-    let replay = match parse_replay(&path) {
+    let replay = match parse_replay(path) {
         Ok(r) => Some(r),
         Err(e) => {
             println!("error: {}", e);
@@ -25,12 +25,12 @@ pub fn parse_file(file_path: String) -> Option<String> {
         }
     };
     let json = serde_json::to_string_pretty(&replay).unwrap();
-    Some(json.clone())
+    Some(json)
 }
 
 pub fn parse_raw(file_path: String) -> Result<replay::ReplayInfo> {
     let path = Path::new(&file_path);
-    let replay_info = parse_replay(&path)?;
+    let replay_info = parse_replay(path)?;
 
     Ok(replay_info)
 }

@@ -56,7 +56,7 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     }
 
     let mut replay = ReplayInfo {
-        mod_chksum: mod_chksum,
+        mod_chksum,
         mod_version: version,
         date: String::from_utf16(&buf).unwrap(),
         ..Default::default()
@@ -78,12 +78,12 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
 }
 
 pub fn parse_chunks(
-    mut cursor: &mut Cursor<Vec<u8>>,
+    cursor: &mut Cursor<Vec<u8>>,
     mut replay: &mut ReplayInfo,
     pos: u64,
 ) -> Result<(), io::Error> {
-    chunky::parse(&mut cursor)?;
-    if let Chunk::Data(DataChunk { duration }) = chunky::parse(&mut cursor)? {
+    chunky::parse(cursor)?;
+    if let Chunk::Data(DataChunk { duration }) = chunky::parse(cursor)? {
         replay.ticks = duration;
     }
     cursor.seek(SeekFrom::Current(36))?;
@@ -94,7 +94,7 @@ pub fn parse_chunks(
             break; // end of header chunks, start of actions
         }
 
-        match chunky::parse(&mut cursor)? {
+        match chunky::parse(cursor)? {
             Chunk::Empty { .. } => (),
             Chunk::FoldInfo { size } => endpos = cursor.position() + size as u64,
             Chunk::Data(DataChunk { duration }) => replay.ticks = duration,
@@ -115,7 +115,7 @@ pub fn parse_chunks(
     Ok(())
 }
 pub fn parse_ticks(
-    mut cursor: &mut Cursor<Vec<u8>>,
+    cursor: &mut Cursor<Vec<u8>>,
     mut replay: &mut ReplayInfo,
     pos: u64,
 ) -> Result<(), io::Error> {
@@ -132,23 +132,35 @@ pub fn parse_ticks(
 
         match tick_type {
             TICK_ACTION => {
-                let (actions, tick) = parse_action(&mut cursor)?;
+                let (actions, tick) = parse_action(cursor)?;
 
                 if tick > 0 {
                     current_tick = tick
                 }
 
-                if actions.len() > 0 {
+                if !actions.is_empty() {
                     for action in actions {
-                        match &action.data[1] {
-                            3 | 5 | 15 | 50 | 78 => replay.actions.push(action),
-                            _ => (),
-                        };
+                        if action.data[1] != 44
+                            && action.data[1] != 11 // set rally point
+                            && action.data[1] != 43 // stop move
+                            && action.data[1] != 47 // capture point
+                            && action.data[1] != 48 // attack
+                            && action.data[1] != 49 // reinforce
+                            && action.data[1] != 52 // attack move
+                            && action.data[1] != 53 // ability on unit
+                            && action.data[1] != 56 // enter building or vehicle
+                            && action.data[1] != 58 // exit vehicle
+                            && action.data[1] != 61 // retreat
+                            && action.data[1] != 70 // force melee
+                            && action.data[1] != 71 // toggle stance
+                        {
+                            replay.actions.push(action);
+                        }
                     }
                 }
             }
             TICK_CHATMSG => {
-                let msg = parse_message(&mut cursor, current_tick)?;
+                let msg = parse_message(cursor, current_tick)?;
                 replay.messages.push(msg);
             }
             _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action")),
@@ -218,12 +230,12 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
     Ok((action_bundle, tick))
 }
 
-pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
+pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
     // Skip this data for now (we do not YET know what it contains)
     cursor.seek(SeekFrom::Current(8))?;
 
     // Derive the players name from the next chunk of data
-    let sender = chunky::read_vstring_utf16(&mut cursor);
+    let sender = chunky::read_vstring_utf16(cursor);
 
     // Derive the player id from the next chunk of data
     let player_id = cursor.read_u8()?;
@@ -232,7 +244,7 @@ pub fn parse_message(mut cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Mess
 
     let kind = cursor.read_u32::<LittleEndian>()?;
     let local = cursor.read_u32::<LittleEndian>()?;
-    let body = chunky::read_vstring_utf16(&mut cursor);
+    let body = chunky::read_vstring_utf16(cursor);
 
     let receiver = match local {
         1 if kind == 1 => "observers".to_string(),
