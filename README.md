@@ -27,20 +27,24 @@ Nr.  | TYPE  | LENGTH  | Description
 - Unit id (once unit is on the field) is not the same as the unit/item id when its purchased at the HQ
 
 - Action data fields 12 + 13 seem to decode the following (amongst other stuff):
-  - (1, 3) => Something to do with action type 48
+  - (1, 3) => Something to do with action type 48; also seen with action type 23
   - (1, 5) => Capturing
   - (1, 13) => Movement
   - (3, 26) => Movement + Direction
   - (5, 4) => Purchase
   - (6, 17) => Movement
+  - (12, 4) => Unknown (in combination with action type 96)
+  - (12, 14) => Unknown (in combination with action type 96)
   - (18, 17) => Movement
   - (15, 35) => Single target, building (e.g. Webway Gate)
   - (25, 5) => Non-targettable, affects every target-type at once (e.g. Angels of Death, Blessing of the Omnissiah, Swift Movement) or is called in at base (e.g. Seer Council). Also applicable to unit abilities that are self-targetting
   - (26, 9) => Single target, unit or global ability (e.g. Scout grenades, Farseer Guide, For the Emperor, Crackshot)
   - (26, 19) => Single target with no secondary projectiles (e.g. Drop Pod, Terminators, Eldritch Storm)
+  - (28, 23) => Unknown (in combination with action type 85)
   - (28, 59) => Multiple targets but no unit call-in (e.g. Orbital Bombardement)
   - (28, 71) => Multiple targets and unit call-in (e.g. Autarch)
   - (32, 84) => Something to do with action type 48
+  - (39, 16) => Unknown (in combination with action type 94)
 
 - Canceling a unit purchase functions like clearing an item from an array without removing the item itself ("nulling" instead of delete). There exists an internal counter that keeps track of each distinct purchase
   even if the same unit is purchases and immediately cancelled. That will still cause the counter to increment.

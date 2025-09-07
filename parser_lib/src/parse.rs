@@ -142,6 +142,7 @@ pub fn parse_ticks(
                     for action in actions {
                         if action.data[1] != 44
                             && action.data[1] != 11 // set rally point
+                            && action.data[1] != 23 // exit building
                             && action.data[1] != 43 // stop move
                             && action.data[1] != 47 // capture point
                             && action.data[1] != 48 // attack
