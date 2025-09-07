@@ -49,7 +49,7 @@ Nr.  | TYPE  | LENGTH  | Description
 - 1 => Ability on placeable object
 - 3 => Build unit
 - 5 => Cancel unit or wargear
-- 9 => Unknown // source: 0x10
+- 9 => Attack from placeable object (e.g. turret)
 - 11 => Set rally point
 - 15 => Upgrade building
 - 23 => Exit building
