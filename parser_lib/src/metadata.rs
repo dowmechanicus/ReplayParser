@@ -387,13 +387,20 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap();
-        for path in [
+        let mut paths = vec![
             root.join("3v3.rec"),
             root.join("recs/1.rec"),
             root.join("recs/purchases_SM.rec"),
             root.join("recs/upgrades.rec"),
             root.join("recs/unit_transformation_and_abilities.rec"),
-        ] {
+        ];
+        // The sixth corpus identity is kept in the local investigation tree,
+        // rather than committed as a fixture.  Set REPLAY_EXTRA while
+        // testing locally to include it without adding a binary to the repo.
+        if let Ok(extra) = std::env::var("REPLAY_EXTRA") {
+            paths.push(std::path::PathBuf::from(extra));
+        }
+        for path in paths {
             let bytes = std::fs::read(&path).unwrap();
             let header = ReplayHeader::parse(&bytes).unwrap();
             assert_eq!(header.raw.len(), REPLAY_HEADER_SIZE);
