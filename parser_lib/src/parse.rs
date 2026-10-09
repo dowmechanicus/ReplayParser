@@ -26,7 +26,7 @@ fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
     let mut buf = [0; 20];
     let mut vec = Vec::new();
 
-    file.read(&mut buf)?;
+    file.read_exact(&mut buf)?;
 
     if buf[12..20].eq(b"DOW2_REC") {
         file.seek(SeekFrom::Start(0))?;
@@ -79,7 +79,7 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
 
 pub fn parse_chunks(
     cursor: &mut Cursor<Vec<u8>>,
-    mut replay: &mut ReplayInfo,
+    replay: &mut ReplayInfo,
     pos: u64,
 ) -> Result<(), io::Error> {
     chunky::parse(cursor)?;
@@ -116,7 +116,7 @@ pub fn parse_chunks(
 }
 pub fn parse_ticks(
     cursor: &mut Cursor<Vec<u8>>,
-    mut replay: &mut ReplayInfo,
+    replay: &mut ReplayInfo,
     pos: u64,
 ) -> Result<(), io::Error> {
     let mut current_tick = 0;
@@ -128,11 +128,20 @@ pub fn parse_ticks(
         }
 
         let tick_type = cursor.read_u32::<LittleEndian>()?;
-        let _tick_size = cursor.read_u32::<LittleEndian>()?;
+        let tick_size = cursor.read_u32::<LittleEndian>()? as u64;
+        let record_end = cursor
+            .position()
+            .checked_add(tick_size)
+            .filter(|end| *end <= pos && *end <= cursor.get_ref().len() as u64)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "record exceeds replay bounds"))?;
+        // Parse a bounded payload so malformed commands cannot consume the next record.
+        let start = cursor.position() as usize;
+        let mut payload = Cursor::new(cursor.get_ref()[start..record_end as usize].to_vec());
+        cursor.set_position(record_end);
 
         match tick_type {
             TICK_ACTION => {
-                let (actions, tick) = parse_action(cursor)?;
+                let (actions, tick) = parse_action(&mut payload)?;
 
                 if tick > 0 {
                     current_tick = tick
@@ -140,20 +149,21 @@ pub fn parse_ticks(
 
                 if !actions.is_empty() {
                     for action in actions {
-                        if action.data[1] != 44
-                            && action.data[1] != 11 // set rally point
-                            && action.data[1] != 23 // exit building
-                            && action.data[1] != 43 // stop move
-                            && action.data[1] != 47 // capture point
-                            && action.data[1] != 48 // attack
-                            && action.data[1] != 49 // reinforce
-                            && action.data[1] != 52 // attack move
-                            && action.data[1] != 53 // ability on unit
-                            && action.data[1] != 56 // enter building or vehicle
-                            && action.data[1] != 58 // exit vehicle
-                            && action.data[1] != 61 // retreat
-                            && action.data[1] != 70 // force melee
-                            && action.data[1] != 71 // toggle stance
+                        if action.data[0] != 44
+                            && action.data[0] != 11 // set rally point
+                            && action.data[0] != 23 // exit building
+                            && action.data[0] != 43 // stop move
+                            && action.data[0] != 47 // capture point
+                            && action.data[0] != 48 // attack
+                            && action.data[0] != 49 // reinforce
+                            && action.data[0] != 52 // attack move
+                            && action.data[0] != 53 // ability on unit
+                            && action.data[0] != 56 // enter building or vehicle
+                            && action.data[0] != 58 // exit vehicle
+                            && action.data[0] != 61 // retreat
+                            && action.data[0] != 70 // force melee
+                            && action.data[0] != 71
+                        // toggle stance
                         {
                             replay.actions.push(action);
                         }
@@ -161,11 +171,17 @@ pub fn parse_ticks(
                 }
             }
             TICK_CHATMSG => {
-                let msg = parse_message(cursor, current_tick)?;
+                let msg = parse_message(&mut payload, current_tick)?;
                 replay.messages.push(msg);
             }
             _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action")),
         };
+        if payload.position() != tick_size {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "record payload length mismatch",
+            ));
+        }
     }
 
     replay.md5 = md5.result_str();
@@ -173,62 +189,53 @@ pub fn parse_ticks(
     Ok(())
 }
 
-/// Reads the data from an action tick
-///
-/// * DWORD [4 bytes] = Identifies this as an Action Tick
-/// * DWORD [4 bytes] = Length in bytes of the remainder of this action tick
-/// * ------- This is where the cursor starts from in this function -------
-/// * BYTE [1 byte] = Always the same
-/// * DWORD [4 bytes] = The number of the current tick. Starts with 1
-/// * DWORD [4 bytes] = Another counter, but does not go up with every tick. Seems somehow related to the chainging of action tick lengths. Start with 0.
-/// * DWORD [4 bytes] = Unknown. Varies with every action tick.
-/// * DWORD [4 bytes] = The amount of player actions bundles in this tick.
-///
+/// Read a synchronization record payload (the outer type/length are already removed).
+/// Bundles contain a u64 metadata value, u32 byte length, one redundant low length
+/// byte, then commands framed by a little-endian u16 length including that u16.
 pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), io::Error> {
-    // Always the same
-    cursor.seek(SeekFrom::Current(1))?;
-
-    // The number of the current tick
+    cursor.read_u8()?; // synchronization message tag (0x20 in inspected files)
     let tick = cursor.read_u32::<LittleEndian>()?;
+    cursor.read_u32::<LittleEndian>()?;
+    cursor.read_u32::<LittleEndian>()?;
+    let nbundles = cursor.read_u32::<LittleEndian>()?;
+    let mut actions = Vec::new();
 
-    // Reading another counter and the unknown field...
-    cursor.seek(SeekFrom::Current(8))?;
-
-    let mut action_bundle = vec![];
-
-    // ...and continue with the amount player actions bundles in this tick
-    let nactions = cursor.read_u32::<LittleEndian>()?;
-
-    for _ in 0..nactions {
-        // Player Action Bundle Shared Header
-        // Next 8 bytes seem to be always filled with 0
-        cursor.seek(SeekFrom::Current(8))?;
-
-        // The remaining size of the action bundle + 1
-        let mut bytes_remain = cursor.read_u32::<LittleEndian>()?;
-        // Header End
-
-        while bytes_remain > 0 {
-            // Total length of player actions in bytes.
-            // DO NOT USE THIS VALUE AS THE REMAINING LENGTH (it is limited to 1 byte).
-            cursor.seek(SeekFrom::Current(1))?;
-
-            // Length of the next action block in bytes included this byte
-            let action_size = cursor.read_u8()?;
-
-            let mut buf = vec![0; (action_size - 2) as usize];
-            cursor.read_exact(&mut buf)?;
-
-            let action = Action::from((&buf, tick));
-
-            action_bundle.push(action);
-
-            bytes_remain -= action_size as u32;
+    for _ in 0..nbundles {
+        cursor.read_u64::<LittleEndian>()?; // preserve interpretation as unknown metadata
+        let bundle_size = cursor.read_u32::<LittleEndian>()? as u64;
+        let length_low = cursor.read_u8()?;
+        if length_low != bundle_size as u8 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "bundle length echo mismatch",
+            ));
         }
-        cursor.seek(SeekFrom::Current(1))?;
-    }
+        let bundle_end = cursor
+            .position()
+            .checked_add(bundle_size)
+            .filter(|end| *end <= cursor.get_ref().len() as u64)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "bundle exceeds record bounds"))?;
 
-    Ok((action_bundle, tick))
+        while cursor.position() < bundle_end {
+            let remaining = bundle_end - cursor.position();
+            if remaining < 2 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "truncated command length",
+                ));
+            }
+            let command_size = cursor.read_u16::<LittleEndian>()? as u64;
+            // Minimum body: opcode, sender/flags, four reserved bytes, receiver
+            // count (possibly zero), custom-data type (possibly 0xff).
+            if command_size < 10 || command_size > remaining {
+                return Err(Error::new(ErrorKind::InvalidData, "invalid command length"));
+            }
+            let mut data = vec![0; (command_size - 2) as usize];
+            cursor.read_exact(&mut data)?;
+            actions.push(Action::from((&data, tick)));
+        }
+    }
+    Ok((actions, tick))
 }
 
 pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
@@ -277,7 +284,7 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
     }
 
     for action in replay.actions.iter_mut() {
-        match player_map.get(&action.data[3]) {
+        match player_map.get(&action.data[2]) {
             Some(id) => {
                 action.player = id.to_owned();
                 if let Some(relic_id) = relic_id_map.get(id) {
@@ -286,5 +293,112 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
             }
             _ => (),
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn command(body: &[u8]) -> Vec<u8> {
+        let mut bytes = ((body.len() + 2) as u16).to_le_bytes().to_vec();
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    fn synchronization(bundles: &[Vec<u8>]) -> Vec<u8> {
+        let mut bytes = vec![0x20];
+        for word in [11u32, 0, 0, bundles.len() as u32] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        for bundle in bundles {
+            bytes.extend_from_slice(&0u64.to_le_bytes());
+            bytes.extend_from_slice(&(bundle.len() as u32).to_le_bytes());
+            bytes.push(bundle.len() as u8);
+            bytes.extend_from_slice(bundle);
+        }
+        bytes
+    }
+
+    fn record(payload: &[u8]) -> Cursor<Vec<u8>> {
+        let mut bytes = 0u32.to_le_bytes().to_vec();
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(payload);
+        Cursor::new(bytes)
+    }
+
+    #[test]
+    fn preserves_adjacent_commands_and_last_payload_byte() {
+        let purchase = vec![3, 1, 233, 3, 0, 0, 16, 0, 120, 180, 5, 4, 141, 0, 0, 7];
+        let retreat = vec![61, 1, 233, 3, 1, 0, 32, 0, 195, 83, 255];
+        let mut bundle = command(&purchase);
+        bundle.extend_from_slice(&command(&retreat));
+        let payload = synchronization(&[bundle, command(&purchase)]);
+        let mut cursor = Cursor::new(payload.clone());
+        let (actions, tick) = parse_action(&mut cursor).unwrap();
+        assert_eq!(tick, 11);
+        assert_eq!(cursor.position(), payload.len() as u64);
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].data, purchase);
+        assert_eq!(actions[1].data, retreat);
+        assert_eq!(actions[2].data, purchase);
+        let json = serde_json::to_value(&actions[0]).unwrap();
+        assert_eq!(json["data"], serde_json::json!(purchase));
+    }
+
+    #[test]
+    fn accepts_lengths_over_255_and_wrapped_bundle_echo() {
+        let mut body = vec![3, 0, 232, 3, 0, 0, 16, 0, 39, 16, 5, 0x81, 0];
+        body.extend(std::iter::repeat(0xab).take(256));
+        let payload = synchronization(&[command(&body)]);
+        let (actions, _) = parse_action(&mut Cursor::new(payload)).unwrap();
+        assert_eq!(actions[0].data, body);
+    }
+
+    #[test]
+    fn rejects_invalid_lengths_without_panicking() {
+        for size in [0u16, 1, 2, 9, 256, 65535] {
+            let mut bytes = command(&[3, 0, 232, 3, 0, 0, 0x40, 0xff]);
+            bytes[..2].copy_from_slice(&size.to_le_bytes());
+            assert!(parse_action(&mut Cursor::new(synchronization(&[bytes]))).is_err());
+        }
+        let mut payload = synchronization(&[command(&[3, 0, 232, 3, 0, 0, 0x40, 0xff])]);
+        payload.pop();
+        assert!(parse_action(&mut Cursor::new(payload)).is_err());
+        let mut payload = synchronization(&[vec![0]]);
+        assert!(parse_action(&mut Cursor::new(payload.clone())).is_err());
+        payload[29] ^= 1;
+        assert!(parse_action(&mut Cursor::new(payload)).is_err());
+    }
+
+    #[test]
+    fn record_boundary_prevents_consuming_following_record() {
+        let payload = synchronization(&[command(&[3, 0, 232, 3, 0, 0, 0x40, 0xff])]);
+        let mut cursor = record(&payload);
+        // First record declares one byte less than its command requires.
+        cursor.get_mut()[4..8].copy_from_slice(&((payload.len() - 1) as u32).to_le_bytes());
+        let len = cursor.get_ref().len() as u64;
+        assert!(parse_ticks(&mut cursor, &mut ReplayInfo::default(), len).is_err());
+        let mut cursor = record(&payload);
+        cursor.get_mut()[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
+        let len = cursor.get_ref().len() as u64;
+        assert!(parse_ticks(&mut cursor, &mut ReplayInfo::default(), len).is_err());
+    }
+
+    #[test]
+    fn parses_existing_samples() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        for (name, ticks, actions, messages) in [
+            ("3v3.rec", 16779, 256, 27),
+            ("recs/1.rec", 11760, 355, 34),
+            ("recs/purchases_SM.rec", 5988, 357, 0),
+            ("recs/upgrades.rec", 1530, 24, 0),
+            ("recs/unit_transformation_and_abilities.rec", 2332, 30, 0),
+        ] {
+            let replay = parse_replay(&root.join(name)).unwrap();
+            assert_eq!(replay.ticks, ticks, "{} ticks", name);
+            assert_eq!(replay.actions.len(), actions, "{} actions", name);
+            assert_eq!(replay.messages.len(), messages, "{} messages", name);
+        }
     }
 }

@@ -7,6 +7,7 @@ pub struct Action {
     pub player: String,
     pub relic_id: u64,
     pub tick: u32,
+    /// Complete command body, starting with the opcode; excludes the u16 wire length.
     pub data: Vec<u8>,
 }
 
@@ -28,16 +29,11 @@ impl Serialize for Action {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Action", 2)?;
-        let data = if self.data.len() > 20_usize {
-            &self.data[1..20]
-        } else {
-            &self.data[1..]
-        };
+        let mut state = serializer.serialize_struct("Action", 4)?;
         state.serialize_field("relic_id", &self.relic_id)?;
         state.serialize_field("name", &self.player)?;
         state.serialize_field("tick", &self.tick)?;
-        state.serialize_field("data", &data)?;
+        state.serialize_field("data", &self.data)?;
         state.end()
     }
 }
