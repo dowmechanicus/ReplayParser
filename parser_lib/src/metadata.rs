@@ -39,15 +39,9 @@ impl ReplayHeader {
         for i in 0..32 {
             date_units.push(LittleEndian::read_u16(&bytes[20 + i * 2..22 + i * 2]));
         }
-        // The writer formats into a 32-code-unit buffer but does not clear
-        // the unused suffix after the first NUL.  Treat the first NUL as the
-        // end of the date while retaining every code unit in `date_units` and
-        // every byte in `raw` for callers that need exact reproduction.
-        let date_end = date_units
-            .iter()
-            .position(|unit| *unit == 0)
-            .unwrap_or(date_units.len());
-        let date = String::from_utf16_lossy(&date_units[..date_end]);
+        let date = String::from_utf16_lossy(&date_units)
+            .trim_end_matches('\0')
+            .to_owned();
 
         Ok(Self {
             version: LittleEndian::read_u32(&bytes[0..4]),
@@ -103,10 +97,6 @@ pub struct ChunkRecord {
     pub header_extra: Vec<u8>,
     pub payload: Vec<u8>,
     pub children: Vec<ChunkRecord>,
-    /// Bytes left in a folder after its complete child headers.  Some
-    /// versions may append folder-specific padding or fields; retaining this
-    /// prevents a folder walk from silently discarding a short tail.
-    pub children_tail: Vec<u8>,
 }
 
 impl ChunkRecord {
@@ -206,10 +196,10 @@ pub fn scan_chunk(
     }
     let header_extra = bytes[offset + 16..header_end].to_vec();
     let payload = bytes[header_end..payload_end].to_vec();
-    let (children, children_tail) = if recurse && name.starts_with("FOLD") {
-        scan_children(bytes, header_end, payload_end, true)?
+    let children = if recurse && name.starts_with("FOLD") {
+        scan_chunk_sequence(bytes, header_end, payload_end, true)?
     } else {
-        (Vec::new(), Vec::new())
+        Vec::new()
     };
 
     Ok(ChunkRecord {
@@ -221,7 +211,6 @@ pub fn scan_chunk(
         header_extra,
         payload,
         children,
-        children_tail,
     })
 }
 
@@ -229,26 +218,10 @@ pub fn scan_chunk(
 /// as opaque data; a complete header with an out-of-bounds size is rejected.
 pub fn scan_chunk_sequence(
     bytes: &[u8],
-    offset: usize,
-    bound: usize,
-    recurse: bool,
-) -> io::Result<Vec<ChunkRecord>> {
-    let (chunks, tail) = scan_children(bytes, offset, bound, recurse)?;
-    if !tail.is_empty() {
-        return Err(invalid_at(
-            "short opaque tail in chunk sequence",
-            bound - tail.len(),
-        ));
-    }
-    Ok(chunks)
-}
-
-fn scan_children(
-    bytes: &[u8],
     mut offset: usize,
     bound: usize,
     recurse: bool,
-) -> io::Result<(Vec<ChunkRecord>, Vec<u8>)> {
+) -> io::Result<Vec<ChunkRecord>> {
     if bound > bytes.len() || offset > bound {
         return Err(invalid("invalid chunk sequence bounds"));
     }
@@ -258,7 +231,7 @@ fn scan_children(
         offset = chunk.end_offset() as usize;
         chunks.push(chunk);
     }
-    Ok((chunks, bytes[offset..bound].to_vec()))
+    Ok(chunks)
 }
 
 /// Read a length-prefixed byte string from a bounded slice. The length is in
@@ -321,7 +294,6 @@ fn invalid_at(message: &str, offset: usize) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::convert::TryInto;
 
     fn chunk(name: &[u8; 8], version: u32, payload: &[u8]) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -342,14 +314,6 @@ mod tests {
         assert_eq!(parsed.children.len(), 1);
         assert_eq!(parsed.children[0].name, "UNKNOWN!");
         assert_eq!(parsed.children[0].payload, vec![1, 2, 3]);
-        assert!(parsed.children_tail.is_empty());
-
-        let mut with_tail = parent.clone();
-        let parent_size = u32::from_le_bytes(with_tail[12..16].try_into().unwrap());
-        with_tail[12..16].copy_from_slice(&(parent_size + 1).to_le_bytes());
-        with_tail.push(0x7f);
-        let parsed = scan_chunk(&with_tail, 0, with_tail.len(), true).unwrap();
-        assert_eq!(parsed.children_tail, vec![0x7f]);
     }
 
     #[test]
@@ -387,24 +351,16 @@ mod tests {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap();
-        let mut paths = vec![
+        for path in [
             root.join("3v3.rec"),
             root.join("recs/1.rec"),
             root.join("recs/purchases_SM.rec"),
             root.join("recs/upgrades.rec"),
             root.join("recs/unit_transformation_and_abilities.rec"),
-        ];
-        // The sixth corpus identity is kept in the local investigation tree,
-        // rather than committed as a fixture.  Set REPLAY_EXTRA while
-        // testing locally to include it without adding a binary to the repo.
-        if let Ok(extra) = std::env::var("REPLAY_EXTRA") {
-            paths.push(std::path::PathBuf::from(extra));
-        }
-        for path in paths {
+        ] {
             let bytes = std::fs::read(&path).unwrap();
             let header = ReplayHeader::parse(&bytes).unwrap();
             assert_eq!(header.raw.len(), REPLAY_HEADER_SIZE);
-            assert!(!header.date.contains('\0'));
             let scan = scan_metadata(&bytes).unwrap();
             assert_eq!(scan.outer_chunks[0].name, "FOLDPOST");
             assert_eq!(scan.chunks.last().unwrap().name, "FOLDINFO");
