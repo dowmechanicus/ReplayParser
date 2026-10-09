@@ -190,37 +190,49 @@ pub fn parse_ticks(
 
         match tick_type {
             TICK_ACTION => {
-                let record = parse_action_record(&mut payload)?;
-                let tick = record.tick;
+                match parse_action_record(&mut payload) {
+                    Ok(record) => {
+                        let tick = record.tick;
 
-                if tick > 0 {
-                    current_tick = tick
-                }
-
-                for bundle in &record.bundles {
-                    for action in &bundle.commands {
-                        replay.commands.push(action.clone());
-                        if action.data[0] != 44
-                            && action.data[0] != 11 // set rally point
-                            && action.data[0] != 23 // exit building
-                            && action.data[0] != 43 // stop move
-                            && action.data[0] != 47 // capture point
-                            && action.data[0] != 48 // attack
-                            && action.data[0] != 49 // reinforce
-                            && action.data[0] != 52 // attack move
-                            && action.data[0] != 53 // ability on unit
-                            && action.data[0] != 56 // enter building or vehicle
-                            && action.data[0] != 58 // exit vehicle
-                            && action.data[0] != 61 // retreat
-                            && action.data[0] != 70 // force melee
-                            && action.data[0] != 71
-                        // toggle stance
-                        {
-                            replay.actions.push(action.clone());
+                        if tick > 0 {
+                            current_tick = tick
                         }
+
+                        for bundle in &record.bundles {
+                            for action in &bundle.commands {
+                                replay.commands.push(action.clone());
+                                if action.data[0] != 44
+                                    && action.data[0] != 11 // set rally point
+                                    && action.data[0] != 23 // exit building
+                                    && action.data[0] != 43 // stop move
+                                    && action.data[0] != 47 // capture point
+                                    && action.data[0] != 48 // attack
+                                    && action.data[0] != 49 // reinforce
+                                    && action.data[0] != 52 // attack move
+                                    && action.data[0] != 53 // ability on unit
+                                    && action.data[0] != 56 // enter building or vehicle
+                                    && action.data[0] != 58 // exit vehicle
+                                    && action.data[0] != 61 // retreat
+                                    && action.data[0] != 70 // force melee
+                                    && action.data[0] != 71
+                                // toggle stance
+                                {
+                                    replay.actions.push(action.clone());
+                                }
+                            }
+                        }
+                        replay.sync_records.push(record);
+                    }
+                    Err(error) => {
+                        let raw = payload.get_ref().clone();
+                        payload.set_position(tick_size);
+                        replay.unknown_records.push(RawRecord {
+                            record_type: tick_type,
+                            payload: raw,
+                            error: Some(error.to_string()),
+                        });
                     }
                 }
-                replay.sync_records.push(record);
             }
             TICK_CHATMSG => match parse_message(&mut payload, current_tick) {
                 Ok(msg) => replay.messages.push(msg),
@@ -624,6 +636,18 @@ mod tests {
         parse_ticks(&mut cursor, &mut replay, len).unwrap();
         assert!(replay.messages.is_empty());
         assert_eq!(replay.unknown_records.len(), 1);
+        assert!(replay.unknown_records[0].error.is_some());
+    }
+
+    #[test]
+    fn retains_malformed_sync_as_opaque_record() {
+        let mut cursor = record(&[0]);
+        let len = cursor.get_ref().len() as u64;
+        let mut replay = ReplayInfo::default();
+        parse_ticks(&mut cursor, &mut replay, len).unwrap();
+        assert!(replay.sync_records.is_empty());
+        assert_eq!(replay.unknown_records.len(), 1);
+        assert_eq!(replay.unknown_records[0].record_type, TICK_ACTION);
         assert!(replay.unknown_records[0].error.is_some());
     }
 
