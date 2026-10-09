@@ -7,7 +7,7 @@ use chunky::Data as DataChunk;
 use chunky::Player as PlayerChunk;
 
 use crate::message::Message;
-use crate::replay::{RawRecord, ReplayInfo};
+use crate::replay::{ActionBundle, RawRecord, ReplayInfo, SyncRecord};
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -40,6 +40,7 @@ fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
 pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     let bytes = read_rec_file(path)?;
     let len = bytes.len() as u64;
+    let metadata = crate::metadata::scan_metadata(&bytes)?;
     let mut cursor = Cursor::new(bytes);
 
     let version = cursor.read_u32::<LittleEndian>()?;
@@ -59,6 +60,7 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
         mod_chksum,
         mod_version: version,
         date: String::from_utf16(&buf).unwrap(),
+        metadata: Some(metadata),
         ..Default::default()
     };
 
@@ -141,14 +143,15 @@ pub fn parse_ticks(
 
         match tick_type {
             TICK_ACTION => {
-                let (actions, tick) = parse_action(&mut payload)?;
+                let record = parse_action_record(&mut payload)?;
+                let tick = record.tick;
 
                 if tick > 0 {
                     current_tick = tick
                 }
 
-                if !actions.is_empty() {
-                    for action in actions {
+                for bundle in &record.bundles {
+                    for action in &bundle.commands {
                         replay.commands.push(action.clone());
                         if action.data[0] != 44
                             && action.data[0] != 11 // set rally point
@@ -166,10 +169,11 @@ pub fn parse_ticks(
                             && action.data[0] != 71
                         // toggle stance
                         {
-                            replay.actions.push(action);
+                            replay.actions.push(action.clone());
                         }
                     }
                 }
+                replay.sync_records.push(record);
             }
             TICK_CHATMSG => {
                 let msg = parse_message(&mut payload, current_tick)?;
@@ -199,16 +203,32 @@ pub fn parse_ticks(
 /// Read a synchronization record payload (the outer type/length are already removed).
 /// Bundles contain a u64 metadata value, u32 byte length, one redundant low length
 /// byte, then commands framed by a little-endian u16 length including that u16.
+#[allow(dead_code)]
 pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), io::Error> {
-    cursor.read_u8()?; // synchronization message tag (0x20 in inspected files)
+    let record = parse_action_record(cursor)?;
+    let tick = record.tick;
+    let actions = record
+        .bundles
+        .into_iter()
+        .flat_map(|bundle| bundle.commands)
+        .collect();
+    Ok((actions, tick))
+}
+
+/// Parse a synchronization payload while retaining its prefix and bundle metadata.
+pub fn parse_action_record(cursor: &mut Cursor<Vec<u8>>) -> Result<SyncRecord, io::Error> {
+    let marker = cursor.read_u8()?; // synchronization message tag (0x20 in inspected files)
+    if marker != 0x20 {
+        return Err(Error::new(ErrorKind::InvalidData, "invalid sync marker"));
+    }
     let tick = cursor.read_u32::<LittleEndian>()?;
-    cursor.read_u32::<LittleEndian>()?;
-    cursor.read_u32::<LittleEndian>()?;
+    let counter = cursor.read_u32::<LittleEndian>()?;
+    let unknown = cursor.read_u32::<LittleEndian>()?;
     let nbundles = cursor.read_u32::<LittleEndian>()?;
-    let mut actions = Vec::new();
+    let mut bundles = Vec::new();
 
     for _ in 0..nbundles {
-        cursor.read_u64::<LittleEndian>()?; // preserve interpretation as unknown metadata
+        let metadata = cursor.read_u64::<LittleEndian>()?;
         let bundle_size = cursor.read_u32::<LittleEndian>()? as u64;
         let length_low = cursor.read_u8()?;
         if length_low != bundle_size as u8 {
@@ -223,6 +243,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
             .filter(|end| *end <= cursor.get_ref().len() as u64)
             .ok_or_else(|| Error::new(ErrorKind::InvalidData, "bundle exceeds record bounds"))?;
 
+        let mut actions = Vec::new();
         while cursor.position() < bundle_end {
             let remaining = bundle_end - cursor.position();
             if remaining < 2 {
@@ -242,8 +263,26 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
             let command = crate::actions::Command::decode(&data)?;
             actions.push(Action::from_decoded(data, tick, command));
         }
+        bundles.push(ActionBundle {
+            metadata,
+            declared_size: bundle_size as u32,
+            length_echo: length_low,
+            commands: actions,
+        });
     }
-    Ok((actions, tick))
+    if cursor.position() != cursor.get_ref().len() as u64 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "sync payload has trailing bytes",
+        ));
+    }
+    Ok(SyncRecord {
+        marker,
+        tick,
+        counter,
+        unknown,
+        bundles,
+    })
 }
 
 pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
@@ -362,6 +401,22 @@ mod tests {
     }
 
     #[test]
+    fn retains_sync_prefix_and_bundle_metadata() {
+        let purchase = vec![3, 1, 233, 3, 0, 0, 16, 0, 120, 180, 5, 4, 141, 0, 0, 7];
+        let payload = synchronization(&[command(&purchase)]);
+        let record = parse_action_record(&mut Cursor::new(payload)).unwrap();
+        assert_eq!(record.marker, 0x20);
+        assert_eq!(record.tick, 11);
+        assert_eq!(record.counter, 0);
+        assert_eq!(record.unknown, 0);
+        assert_eq!(record.bundles.len(), 1);
+        assert_eq!(record.bundles[0].metadata, 0);
+        assert_eq!(record.bundles[0].declared_size, 18);
+        assert_eq!(record.bundles[0].length_echo, 18);
+        assert_eq!(record.bundles[0].commands.len(), 1);
+    }
+
+    #[test]
     fn decodes_receiver_encodings_and_custom_lengths() {
         let mut single = vec![250, 0x81, 1, 2, 3, 4];
         single.extend_from_slice(&0x1000_0007u32.to_be_bytes());
@@ -452,16 +507,17 @@ mod tests {
     #[test]
     fn parses_existing_samples() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        for (name, ticks, actions, commands, messages) in [
-            ("3v3.rec", 16779, 256, 16449, 27),
-            ("recs/1.rec", 11760, 355, 2832, 34),
-            ("recs/purchases_SM.rec", 5988, 357, 715, 0),
-            ("recs/upgrades.rec", 1530, 24, 211, 0),
+        for (name, ticks, actions, commands, bundles, messages) in [
+            ("3v3.rec", 16779, 256, 16449, 133228, 27),
+            ("recs/1.rec", 11760, 355, 2832, 20712, 34),
+            ("recs/purchases_SM.rec", 5988, 357, 715, 614, 0),
+            ("recs/upgrades.rec", 1530, 24, 211, 185, 0),
             (
                 "recs/unit_transformation_and_abilities.rec",
                 2332,
                 30,
                 227,
+                194,
                 0,
             ),
         ] {
@@ -469,6 +525,22 @@ mod tests {
             assert_eq!(replay.ticks, ticks, "{} ticks", name);
             assert_eq!(replay.actions.len(), actions, "{} actions", name);
             assert_eq!(replay.commands.len(), commands, "{} commands", name);
+            assert_eq!(
+                replay.sync_records.len(),
+                ticks as usize,
+                "{} sync records",
+                name
+            );
+            assert_eq!(
+                replay
+                    .sync_records
+                    .iter()
+                    .map(|record| record.bundles.len())
+                    .sum::<usize>(),
+                bundles,
+                "{} bundles",
+                name
+            );
             assert!(
                 replay
                     .commands

@@ -10,6 +10,7 @@ extern crate crypto;
 
 mod chunky;
 mod message;
+mod metadata;
 mod parse;
 mod replay;
 use parse::*;
