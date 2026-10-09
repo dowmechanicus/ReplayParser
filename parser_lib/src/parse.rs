@@ -284,6 +284,10 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
     }
 
     for action in replay.actions.iter_mut() {
+        // data[1] carries the sender/slot flags. Message.player_id joins on
+        // the low byte of the first metadata word at data[2..4] in the
+        // inspected files; keep this compatibility key distinct from the
+        // semantic sender field.
         match player_map.get(&action.data[2]) {
             Some(id) => {
                 action.player = id.to_owned();

@@ -47,9 +47,19 @@ bytes. Earlier versions treated a byte before the body as a length, dropped the
 last body byte, and serialized only `data[1..20]`. Consumers should therefore:
 
 * read the opcode from `data[0]`;
-* treat `data[1..]` as command-specific fields;
+* treat `data[1]` as the sender/slot byte with flag bits (the low seven bits
+  identify the sender slot in the inspected samples);
+* treat `data[2..6]` as the following four metadata bytes. In the inspected
+  samples, the first two form a little-endian value of `1000 + sender slot`,
+  while the next two are an action sequence field;
 * never expect the wire `u16` size in `Action::data`; and
 * avoid assuming that the JSON array has a fixed 19-byte maximum.
+
+The parser's message join currently uses `data[2]` because replay messages
+store the low byte of that first metadata word as `Message.player_id`. That is
+a compatibility join key, not a claim that `data[2]` is the command's sender
+field. The sender/slot field is `data[1]`; the four bytes at `data[2..6]` are
+metadata following it.
 
 The public `parse_action` function keeps its signature and still expects a
 cursor positioned at an action-record payload. Code that supplied a cursor
