@@ -15,6 +15,9 @@ pub struct SyncRecord {
     pub tick: u32,
     pub counter: u32,
     pub unknown: u32,
+    /// Exact payload bytes, retained so fields added by future game versions
+    /// remain available even when this parser does not interpret them.
+    pub raw_payload: Vec<u8>,
     pub bundles: Vec<ActionBundle>,
 }
 
