@@ -224,15 +224,21 @@ pub fn parse_ticks(
             }
             TICK_CHATMSG => match parse_message(&mut payload, current_tick) {
                 Ok(msg) => replay.messages.push(msg),
-                Err(_) => replay.unknown_records.push(RawRecord {
-                    record_type: tick_type,
-                    payload: payload.get_ref().clone(),
-                }),
+                Err(error) => {
+                    let raw = payload.get_ref().clone();
+                    payload.set_position(tick_size);
+                    replay.unknown_records.push(RawRecord {
+                        record_type: tick_type,
+                        payload: raw,
+                        error: Some(error.to_string()),
+                    });
+                }
             },
             _ => {
                 replay.unknown_records.push(RawRecord {
                     record_type: tick_type,
                     payload: payload.get_ref().clone(),
+                    error: None,
                 });
                 continue;
             }
@@ -593,6 +599,7 @@ mod tests {
         assert_eq!(replay.unknown_records.len(), 1);
         assert_eq!(replay.unknown_records[0].record_type, 99);
         assert_eq!(replay.unknown_records[0].payload, vec![9, 8, 7]);
+        assert!(replay.unknown_records[0].error.is_none());
     }
 
     #[test]
@@ -606,6 +613,18 @@ mod tests {
         assert_eq!(actions[0].data, body);
         assert!(actions[0].command.is_none());
         assert!(actions[0].command_error.is_some());
+    }
+
+    #[test]
+    fn retains_malformed_chat_as_opaque_record() {
+        let mut cursor = record(&[1, 0, 0, 0]);
+        cursor.get_mut()[..4].copy_from_slice(&TICK_CHATMSG.to_le_bytes());
+        let len = cursor.get_ref().len() as u64;
+        let mut replay = ReplayInfo::default();
+        parse_ticks(&mut cursor, &mut replay, len).unwrap();
+        assert!(replay.messages.is_empty());
+        assert_eq!(replay.unknown_records.len(), 1);
+        assert!(replay.unknown_records[0].error.is_some());
     }
 
     #[test]
