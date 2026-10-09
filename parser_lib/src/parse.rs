@@ -417,6 +417,16 @@ mod tests {
     }
 
     #[test]
+    fn retains_unknown_opcode_as_raw_and_structured_command() {
+        let body = vec![250, 0, 232, 3, 0, 0, 0x40, 0xff];
+        let payload = synchronization(&[command(&body)]);
+        let (actions, _) = parse_action(&mut Cursor::new(payload)).unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].data, body);
+        assert_eq!(actions[0].command.as_ref().unwrap().opcode, 250);
+    }
+
+    #[test]
     fn decodes_receiver_encodings_and_custom_lengths() {
         let mut single = vec![250, 0x81, 1, 2, 3, 4];
         single.extend_from_slice(&0x1000_0007u32.to_be_bytes());
