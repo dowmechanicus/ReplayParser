@@ -46,6 +46,7 @@ pub struct ReplayInfo {
     /// All decoded commands, including opcodes omitted from the legacy
     /// filtered `actions` view.
     pub commands: Vec<Action>,
+    /// Legacy filtered view retained for existing consumers.
     pub actions: Vec<Action>,
     pub unknown_records: Vec<RawRecord>,
 }
