@@ -1,4 +1,4 @@
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use crypto::digest::Digest;
 use crypto::md5::Md5;
 
@@ -39,40 +39,36 @@ fn read_rec_file(path: &Path) -> Result<Vec<u8>, io::Error> {
 
 pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     let bytes = read_rec_file(path)?;
-    let len = bytes.len() as u64;
     let metadata = crate::metadata::scan_metadata(&bytes)?;
+    let action_offset = metadata.end_offset;
+    let header = &metadata.header;
     let mut cursor = Cursor::new(bytes);
 
-    let version = cursor.read_u32::<LittleEndian>()?;
-    let mod_chksum = cursor.read_u32::<LittleEndian>()?;
-    cursor.seek(SeekFrom::Current(4))?;
-    cursor.seek(SeekFrom::Current(8))?;
-
-    let mut buf: Vec<u16> = Vec::new();
-    for _ in 0..19 {
-        let c = cursor.read_u16::<LittleEndian>().unwrap_or(0);
-        if c > 31 && c < 123 {
-            buf.push(c);
-        }
-    }
+    let version = header.version;
+    let mod_chksum = header.checksum;
+    cursor.set_position(crate::metadata::REPLAY_HEADER_SIZE as u64);
 
     let mut replay = ReplayInfo {
         mod_chksum,
         mod_version: version,
-        date: String::from_utf16(&buf).unwrap(),
+        date: header.date.clone(),
         metadata: Some(metadata),
         ..Default::default()
     };
 
-    cursor.seek(SeekFrom::Current(26))?;
+    let mut digest = Md5::new();
+    digest.input(cursor.get_ref());
+    replay.md5 = digest.result_str();
+
     let mut buf = vec![0; 12];
     cursor.read_exact(&mut buf)?;
     //let file_format = String::from_utf8(buf).unwrap_or("".to_string());
 
     cursor.seek(SeekFrom::Current(24))?;
 
-    parse_chunks(&mut cursor, &mut replay, len)?;
-    parse_ticks(&mut cursor, &mut replay, len)?;
+    parse_chunks(&mut cursor, &mut replay, action_offset)?;
+    let replay_len = cursor.get_ref().len() as u64;
+    parse_ticks(&mut cursor, &mut replay, replay_len)?;
 
     match_player_ids_from_messages(&mut replay);
 
@@ -84,9 +80,21 @@ pub fn parse_chunks(
     replay: &mut ReplayInfo,
     pos: u64,
 ) -> Result<(), io::Error> {
+    if cursor.position() >= pos {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "metadata ends before chunk stream",
+        ));
+    }
     chunky::parse(cursor)?;
     if let Chunk::Data(DataChunk { duration }) = chunky::parse(cursor)? {
         replay.ticks = duration;
+    }
+    if cursor.position() > pos {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "legacy chunk parser crossed metadata boundary",
+        ));
     }
     cursor.seek(SeekFrom::Current(36))?;
 
@@ -94,6 +102,41 @@ pub fn parse_chunks(
     loop {
         if cursor.position() >= endpos {
             break; // end of header chunks, start of actions
+        }
+
+        let chunk_start = cursor.position() as usize;
+        if pos.saturating_sub(cursor.position()) < 28 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "truncated metadata chunk header",
+            ));
+        }
+        let bytes = cursor.get_ref();
+        let name = String::from_utf8_lossy(&bytes[chunk_start..chunk_start + 8]).to_string();
+        let chunk_size = LittleEndian::read_u32(&bytes[chunk_start + 12..chunk_start + 16]) as u64;
+        let chunk_end = cursor
+            .position()
+            .checked_add(28)
+            .and_then(|end| end.checked_add(chunk_size))
+            .filter(|end| *end <= pos && *end <= bytes.len() as u64)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "metadata chunk exceeds boundary"))?;
+
+        // Metadata scanning already retained unknown chunks byte-for-byte.
+        // Skip them here so the legacy semantic view cannot make an otherwise
+        // valid replay unparseable merely because a mod added a chunk name.
+        let known = matches!(
+            name.as_str(),
+            "DATADATA"
+                | "DATASDSC"
+                | "DATABASE"
+                | "DATAINFO"
+                | "FOLDINFO"
+                | "FOLDPOST"
+                | "FOLDGPLY"
+        );
+        if !known {
+            cursor.set_position(chunk_end);
+            continue;
         }
 
         match chunky::parse(cursor)? {
@@ -112,6 +155,12 @@ pub fn parse_chunks(
                 }
             }
         };
+        if cursor.position() > chunk_end {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "legacy chunk parser crossed chunk boundary",
+            ));
+        }
     }
 
     Ok(())
@@ -122,8 +171,6 @@ pub fn parse_ticks(
     pos: u64,
 ) -> Result<(), io::Error> {
     let mut current_tick = 0;
-    let mut md5 = Md5::new();
-
     loop {
         if cursor.position() >= pos {
             break;
@@ -175,10 +222,13 @@ pub fn parse_ticks(
                 }
                 replay.sync_records.push(record);
             }
-            TICK_CHATMSG => {
-                let msg = parse_message(&mut payload, current_tick)?;
-                replay.messages.push(msg);
-            }
+            TICK_CHATMSG => match parse_message(&mut payload, current_tick) {
+                Ok(msg) => replay.messages.push(msg),
+                Err(_) => replay.unknown_records.push(RawRecord {
+                    record_type: tick_type,
+                    payload: payload.get_ref().clone(),
+                }),
+            },
             _ => {
                 replay.unknown_records.push(RawRecord {
                     record_type: tick_type,
@@ -194,8 +244,6 @@ pub fn parse_ticks(
             ));
         }
     }
-
-    replay.md5 = md5.result_str();
 
     Ok(())
 }
@@ -217,6 +265,7 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
 
 /// Parse a synchronization payload while retaining its prefix and bundle metadata.
 pub fn parse_action_record(cursor: &mut Cursor<Vec<u8>>) -> Result<SyncRecord, io::Error> {
+    let raw_payload = cursor.get_ref().clone();
     let marker = cursor.read_u8()?; // synchronization message tag (0x20 in inspected files)
     if marker != 0x20 {
         return Err(Error::new(ErrorKind::InvalidData, "invalid sync marker"));
@@ -260,8 +309,10 @@ pub fn parse_action_record(cursor: &mut Cursor<Vec<u8>>) -> Result<SyncRecord, i
             }
             let mut data = vec![0; (command_size - 2) as usize];
             cursor.read_exact(&mut data)?;
-            let command = crate::actions::Command::decode(&data)?;
-            actions.push(Action::from_decoded(data, tick, command));
+            match crate::actions::Command::decode(&data) {
+                Ok(command) => actions.push(Action::from_decoded(data, tick, command)),
+                Err(error) => actions.push(Action::from_raw(data, tick, error.to_string())),
+            }
         }
         bundles.push(ActionBundle {
             metadata,
@@ -281,25 +332,49 @@ pub fn parse_action_record(cursor: &mut Cursor<Vec<u8>>) -> Result<SyncRecord, i
         tick,
         counter,
         unknown,
+        raw_payload,
         bundles,
     })
 }
 
 pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message, io::Error> {
-    // Skip this data for now (we do not YET know what it contains)
-    cursor.seek(SeekFrom::Current(8))?;
-
-    // Derive the players name from the next chunk of data
-    let sender = chunky::read_vstring_utf16(cursor);
-
-    // Derive the player id from the next chunk of data
-    let player_id = cursor.read_u8()?;
-
-    cursor.seek(SeekFrom::Current(3))?;
-
-    let kind = cursor.read_u32::<LittleEndian>()?;
-    let local = cursor.read_u32::<LittleEndian>()?;
-    let body = chunky::read_vstring_utf16(cursor);
+    let raw = cursor.get_ref().clone();
+    let mut offset = 0usize;
+    let wire_kind = crate::metadata::read_u32(&raw, &mut offset)?;
+    let wire_size = crate::metadata::read_u32(&raw, &mut offset)?;
+    if wire_size as usize != raw.len().saturating_sub(8) {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "chat payload size field does not match record",
+        ));
+    }
+    let sender = crate::metadata::read_vstring_utf16(&raw, &mut offset)?;
+    if offset >= raw.len() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "chat player id is missing",
+        ));
+    }
+    let player_id = raw[offset];
+    offset += 1;
+    if raw.len().saturating_sub(offset) < 3 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "chat player metadata is truncated",
+        ));
+    }
+    let player_reserved = [raw[offset], raw[offset + 1], raw[offset + 2]];
+    offset += 3;
+    let kind = crate::metadata::read_u32(&raw, &mut offset)?;
+    let local = crate::metadata::read_u32(&raw, &mut offset)?;
+    let body = crate::metadata::read_vstring_utf16(&raw, &mut offset)?;
+    if offset != raw.len() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "chat payload has trailing bytes",
+        ));
+    }
+    cursor.set_position(raw.len() as u64);
 
     let receiver = match local {
         1 if kind == 1 => "observers".to_string(),
@@ -309,10 +384,16 @@ pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message,
 
     Ok(Message {
         tick,
+        wire_kind,
+        wire_size,
         sender,
         receiver,
         body,
         player_id,
+        player_reserved,
+        kind,
+        local,
+        raw,
     })
 }
 
@@ -515,6 +596,50 @@ mod tests {
     }
 
     #[test]
+    fn retains_structurally_framed_but_unknown_command_layout() {
+        // The command length is valid, but custom type 7 declares two bytes
+        // while only one is present.  The envelope remains inspectable.
+        let body = vec![250, 0, 0, 0, 0, 0, 0x40, 7, 2, 0xaa];
+        let payload = synchronization(&[command(&body)]);
+        let (actions, _) = parse_action(&mut Cursor::new(payload)).unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].data, body);
+        assert!(actions[0].command.is_none());
+        assert!(actions[0].command_error.is_some());
+    }
+
+    #[test]
+    fn retains_chat_wire_fields_and_raw_payload() {
+        fn v16(value: &str) -> Vec<u8> {
+            let units: Vec<u16> = value.encode_utf16().collect();
+            let mut bytes = (units.len() as u32).to_le_bytes().to_vec();
+            for unit in units {
+                bytes.extend_from_slice(&unit.to_le_bytes());
+            }
+            bytes
+        }
+
+        let mut payload = vec![1, 0, 0, 0, 0, 0, 0, 0];
+        payload.extend_from_slice(&v16("Alice"));
+        payload.extend_from_slice(&[7, 3, 0, 0]);
+        payload.extend_from_slice(&1u32.to_le_bytes());
+        payload.extend_from_slice(&1u32.to_le_bytes());
+        payload.extend_from_slice(&v16("hello"));
+        let size = (payload.len() - 8) as u32;
+        payload[4..8].copy_from_slice(&size.to_le_bytes());
+
+        let message = parse_message(&mut Cursor::new(payload.clone()), 42).unwrap();
+        assert_eq!(message.wire_kind, 1);
+        assert_eq!(message.wire_size, size);
+        assert_eq!(message.sender, "Alice");
+        assert_eq!(message.player_id, 7);
+        assert_eq!(message.player_reserved, [3, 0, 0]);
+        assert_eq!(message.kind, 1);
+        assert_eq!(message.local, 1);
+        assert_eq!(message.raw, payload);
+    }
+
+    #[test]
     fn parses_existing_samples() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         for (name, ticks, actions, commands, bundles, messages) in [
@@ -532,6 +657,7 @@ mod tests {
             ),
         ] {
             let replay = parse_replay(&root.join(name)).unwrap();
+            assert_eq!(replay.md5.len(), 32, "{} md5", name);
             assert_eq!(replay.ticks, ticks, "{} ticks", name);
             assert_eq!(replay.actions.len(), actions, "{} actions", name);
             assert_eq!(replay.commands.len(), commands, "{} commands", name);

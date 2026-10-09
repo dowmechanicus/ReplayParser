@@ -138,18 +138,26 @@ pub struct Action {
     pub data: Vec<u8>,
     /// Structured generic fields, present for commands accepted by the decoder.
     pub command: Option<Command>,
+    /// If the command envelope is structurally framed but has an unknown
+    /// layout, retain the raw body and expose the decoder failure here rather
+    /// than dropping the command or aborting the replay.
+    pub command_error: Option<String>,
 }
 
 impl<'a> From<ActionData<'a>> for Action {
     fn from(action_data: ActionData<'a>) -> Self {
         let (data, tick) = action_data;
 
-        Self {
-            player: String::new(),
-            relic_id: 0,
-            tick,
-            data: data.clone(),
-            command: Command::decode(data).ok(),
+        match Command::decode(data) {
+            Ok(command) => Self {
+                player: String::new(),
+                relic_id: 0,
+                tick,
+                data: data.clone(),
+                command: Some(command),
+                command_error: None,
+            },
+            Err(error) => Self::from_raw(data.clone(), tick, error.to_string()),
         }
     }
 }
@@ -162,6 +170,18 @@ impl Action {
             tick,
             data,
             command: Some(command),
+            command_error: None,
+        }
+    }
+
+    pub fn from_raw(data: Vec<u8>, tick: u32, error: String) -> Self {
+        Self {
+            player: String::new(),
+            relic_id: 0,
+            tick,
+            data,
+            command: None,
+            command_error: Some(error),
         }
     }
 }
@@ -171,12 +191,13 @@ impl Serialize for Action {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Action", 5)?;
+        let mut state = serializer.serialize_struct("Action", 6)?;
         state.serialize_field("relic_id", &self.relic_id)?;
         state.serialize_field("name", &self.player)?;
         state.serialize_field("tick", &self.tick)?;
         state.serialize_field("data", &self.data)?;
         state.serialize_field("command", &self.command)?;
+        state.serialize_field("command_error", &self.command_error)?;
         state.end()
     }
 }

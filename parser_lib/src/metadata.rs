@@ -117,6 +117,8 @@ impl ChunkRecord {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MetadataScan {
+    /// The complete fixed-size replay header, including unused UTF-16 units.
+    pub header: ReplayHeader,
     pub outer_archive: ArchiveHeader,
     pub outer_chunks: Vec<ChunkRecord>,
     pub inner_archive: ArchiveHeader,
@@ -132,6 +134,7 @@ pub struct MetadataScan {
 /// after that folder and returns the action-stream offset.  Every chunk's
 /// header, payload, and nested folder children are retained verbatim.
 pub fn scan_metadata(bytes: &[u8]) -> io::Result<MetadataScan> {
+    let header = ReplayHeader::parse(bytes)?;
     let outer_archive = ArchiveHeader::parse(bytes, REPLAY_HEADER_SIZE)?;
     // The outer archive has no root-size field either, but its first chunk is
     // FOLDPOST and the end of that chunk is the next archive header.  Parsing
@@ -171,6 +174,7 @@ pub fn scan_metadata(bytes: &[u8]) -> io::Result<MetadataScan> {
     let end_offset = foldinfo_end.ok_or_else(|| invalid("metadata has no FOLDINFO folder"))?;
 
     Ok(MetadataScan {
+        header,
         outer_archive,
         outer_chunks,
         inner_archive,
@@ -298,7 +302,7 @@ pub fn read_vstring_utf16(bytes: &[u8], offset: &mut usize) -> io::Result<String
     Ok(String::from_utf16_lossy(&units))
 }
 
-fn read_u32(bytes: &[u8], offset: &mut usize) -> io::Result<u32> {
+pub(crate) fn read_u32(bytes: &[u8], offset: &mut usize) -> io::Result<u32> {
     let end = offset
         .checked_add(4)
         .ok_or_else(|| invalid("u32 offset overflow"))?;
