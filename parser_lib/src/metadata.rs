@@ -2,15 +2,25 @@
 //! precedes the tick stream.
 //!
 //! The original parser treated the archive header as a 36 byte gap and then
-//! parsed chunks directly from the file cursor.  That happened to work for
-//! the samples in the repository, but made a changed archive header or an
-//! unknown chunk indistinguishable from a corrupt replay.  This module keeps
-//! the bytes and offsets while exposing the fields whose widths are known.
+//! parsed chunks directly from the file cursor. That happened to work for the
+//! samples in the repository, but made a changed archive header or an unknown
+//! chunk indistinguishable from a corrupt replay. This module keeps the bytes
+//! and offsets while exposing the fields whose widths are known.
+//!
+//! The scanner currently supports the archive layout observed in the supplied
+//! replays: an 84-byte replay header followed by 36-byte Relic Chunky archive
+//! headers. The 20 bytes after each archive signature are retained as opaque
+//! fields; this parser has no evidence for a declared archive-header-size
+//! field and does not infer one from those bytes. A different archive schema
+//! is rejected as unsupported until its header width and bounds are identified.
 
 use byteorder::{ByteOrder, LittleEndian};
 use std::io::{self, Error, ErrorKind};
 
 pub const REPLAY_HEADER_SIZE: usize = 84;
+/// Width of the observed Relic Chunky archive header. This is a supported
+/// schema constant, not a claim that every future archive version has this
+/// width.
 pub const ARCHIVE_HEADER_SIZE: usize = 36;
 pub const CHUNK_HEADER_SIZE: usize = 28;
 pub const CHUNKY_SIGNATURE: &[u8; 16] = b"Relic Chunky\r\n\x1a\0";
@@ -65,6 +75,7 @@ impl ReplayHeader {
 pub struct ArchiveHeader {
     pub offset: u64,
     pub signature: Vec<u8>,
+    /// Opaque bytes after the signature; no archive-size meaning is assigned.
     pub fields: Vec<u8>,
     pub raw: Vec<u8>,
 }
