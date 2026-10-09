@@ -1,3 +1,11 @@
+# Historical action observations
+
+This table is retained for provenance only. It predates the corrected command
+framing and contains unverified field and ID interpretations from a small
+replay sample; it is not a cross-version unit or runtime-ID catalogue. Use
+the structured `ReplayInfo.commands` output and the repository replay-format
+notes for current wire fields.
+
 # The action data block has the following format:
 
 Nr.  | TYPE  | LENGTH  | Description

@@ -1,3 +1,15 @@
+# Replay format status
+
+The action tables below are historical observations from a small replay
+sample. They used the old fixed-offset command framing and contain
+unverified field and ID interpretations; they are not a cross-version ID
+catalogue. The current wire format and the distinction between blueprint,
+purchase, and runtime receiver IDs are documented in
+[`docs/replay-format.md`](docs/replay-format.md). Validate replay boundaries
+before assigning gameplay meanings to opcode or custom payload values.
+
+# Historical action observations
+
 # The action data block has the following format:
 
 Nr.  | TYPE  | LENGTH  | Description
