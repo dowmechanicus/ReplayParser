@@ -1,11 +1,13 @@
 use crate::{actions::Action, chunky::Chunk, message::Message, metadata::MetadataScan};
 
-/// An outer replay record whose type is not understood by this parser.
-/// Retaining the type and payload keeps future record kinds inspectable.
+/// An outer replay record whose type is not understood, or whose known
+/// payload could not be semantically decoded. Retaining the type and payload
+/// keeps future record kinds inspectable and avoids silent loss.
 #[derive(Debug, Serialize)]
 pub struct RawRecord {
     pub record_type: u32,
     pub payload: Vec<u8>,
+    pub error: Option<String>,
 }
 
 /// A synchronization record's generic prefix and all of its action bundles.
