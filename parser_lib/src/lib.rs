@@ -11,6 +11,7 @@ extern crate crypto;
 pub mod actions;
 pub mod chunky;
 pub mod message;
+pub mod metadata;
 mod parse;
 pub mod replay;
 use parse::*;
