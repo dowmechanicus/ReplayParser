@@ -96,7 +96,21 @@ pub fn parse_chunks(
             "legacy chunk parser crossed metadata boundary",
         ));
     }
-    cursor.seek(SeekFrom::Current(36))?;
+    let archive_offset = cursor.position() as usize;
+    let bytes = cursor.get_ref();
+    let archive_end = archive_offset
+        .checked_add(crate::metadata::ARCHIVE_HEADER_SIZE)
+        .ok_or_else(|| Error::new(ErrorKind::InvalidData, "inner archive offset overflow"))?;
+    if archive_end > bytes.len()
+        || &bytes[archive_offset..archive_offset + crate::metadata::CHUNKY_SIGNATURE.len()]
+            != crate::metadata::CHUNKY_SIGNATURE
+    {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "inner archive header is missing",
+        ));
+    }
+    cursor.set_position(archive_end as u64);
 
     let mut endpos = pos;
     loop {
@@ -139,7 +153,17 @@ pub fn parse_chunks(
             continue;
         }
 
-        match chunky::parse(cursor)? {
+        let parsed = match chunky::parse(cursor) {
+            Ok(chunk) => chunk,
+            Err(_) => {
+                // The bounded metadata scan has retained this chunk's raw
+                // bytes. Keep the semantic projection optional when a known
+                // chunk's payload layout changes across versions.
+                cursor.set_position(chunk_end);
+                continue;
+            }
+        };
+        match parsed {
             Chunk::Empty { .. } => (),
             Chunk::FoldInfo { size } => endpos = cursor.position() + size as u64,
             Chunk::Data(DataChunk { duration }) => replay.ticks = duration,

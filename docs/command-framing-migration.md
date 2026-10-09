@@ -30,8 +30,12 @@ byte command_stream[command_bytes]
 The command stream is a concatenation of framed commands. A command begins
 with a little-endian `u16` size that includes those two size bytes. The
 remaining `size - 2` bytes are the command body, beginning with the action
-opcode. The bundle count and all lengths are bounds, not hints: a malformed
-length causes parsing to stop with `InvalidData` instead of consuming the next
+opcode. The bundle count and all lengths are bounds, not hints. The low-level
+`parse_action`/`parse_action_record` functions return `InvalidData` for a
+malformed frame because there is no safe way to recover command boundaries
+inside that payload. The top-level `parse_replay` parser already has the
+outer record boundary; it retains malformed action or chat payloads in
+`ReplayInfo.unknown_records` with an error string and continues to the next
 record.
 
 The one-byte bundle value is only an echo of the low byte of the `u32` count.
@@ -65,6 +69,19 @@ The public `parse_action` function keeps its signature and still expects a
 cursor positioned at an action-record payload. Code that supplied a cursor
 containing the outer record type and size must remove those eight bytes first,
 or call `parse_replay` instead.
+
+For complete JSON command coverage, use the top-level `commands` array. The
+existing `actions` array is a compatibility view that omits several legacy
+opcode values. For example:
+
+```text
+cargo run -p parser -- path/to/replay.rec > replay.json
+# inspect `.commands`, not only `.actions`, in the resulting JSON
+```
+
+Each retained command has its complete `data` body and a structured
+`command` value when the generic envelope decoder recognizes its layout;
+unsupported custom layouts retain `command_error` alongside the raw bytes.
 
 The framing and boundary checks were validated against the repository's five
 sample replays. They preserve the existing tick/action/message counts while
