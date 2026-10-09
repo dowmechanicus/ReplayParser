@@ -39,9 +39,15 @@ impl ReplayHeader {
         for i in 0..32 {
             date_units.push(LittleEndian::read_u16(&bytes[20 + i * 2..22 + i * 2]));
         }
-        let date = String::from_utf16_lossy(&date_units)
-            .trim_end_matches('\0')
-            .to_owned();
+        // The writer formats into a 32-code-unit buffer but does not clear
+        // the unused suffix after the first NUL.  Treat the first NUL as the
+        // end of the date while retaining every code unit in `date_units` and
+        // every byte in `raw` for callers that need exact reproduction.
+        let date_end = date_units
+            .iter()
+            .position(|unit| *unit == 0)
+            .unwrap_or(date_units.len());
+        let date = String::from_utf16_lossy(&date_units[..date_end]);
 
         Ok(Self {
             version: LittleEndian::read_u32(&bytes[0..4]),
@@ -391,6 +397,7 @@ mod tests {
             let bytes = std::fs::read(&path).unwrap();
             let header = ReplayHeader::parse(&bytes).unwrap();
             assert_eq!(header.raw.len(), REPLAY_HEADER_SIZE);
+            assert!(!header.date.contains('\0'));
             let scan = scan_metadata(&bytes).unwrap();
             assert_eq!(scan.outer_chunks[0].name, "FOLDPOST");
             assert_eq!(scan.chunks.last().unwrap().name, "FOLDINFO");
