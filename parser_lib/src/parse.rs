@@ -7,7 +7,7 @@ use chunky::Data as DataChunk;
 use chunky::Player as PlayerChunk;
 
 use crate::message::Message;
-use crate::replay::ReplayInfo;
+use crate::replay::{RawRecord, ReplayInfo};
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -149,6 +149,7 @@ pub fn parse_ticks(
 
                 if !actions.is_empty() {
                     for action in actions {
+                        replay.commands.push(action.clone());
                         if action.data[0] != 44
                             && action.data[0] != 11 // set rally point
                             && action.data[0] != 23 // exit building
@@ -174,7 +175,13 @@ pub fn parse_ticks(
                 let msg = parse_message(&mut payload, current_tick)?;
                 replay.messages.push(msg);
             }
-            _ => return Err(Error::new(ErrorKind::InvalidData, "invalid action")),
+            _ => {
+                replay.unknown_records.push(RawRecord {
+                    record_type: tick_type,
+                    payload: payload.get_ref().clone(),
+                });
+                continue;
+            }
         };
         if payload.position() != tick_size {
             return Err(Error::new(
@@ -232,7 +239,8 @@ pub fn parse_action(cursor: &mut Cursor<Vec<u8>>) -> Result<(Vec<Action>, u32), 
             }
             let mut data = vec![0; (command_size - 2) as usize];
             cursor.read_exact(&mut data)?;
-            actions.push(Action::from((&data, tick)));
+            let command = crate::actions::Command::decode(&data)?;
+            actions.push(Action::from_decoded(data, tick, command));
         }
     }
     Ok((actions, tick))
@@ -283,7 +291,7 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
         }
     }
 
-    for action in replay.actions.iter_mut() {
+    for action in replay.actions.iter_mut().chain(replay.commands.iter_mut()) {
         // data[1] carries the sender/slot flags. Message.player_id joins on
         // the low byte of the first metadata word at data[2..4] in the
         // inspected files; keep this compatibility key distinct from the
@@ -346,8 +354,48 @@ mod tests {
         assert_eq!(actions[0].data, purchase);
         assert_eq!(actions[1].data, retreat);
         assert_eq!(actions[2].data, purchase);
+        assert_eq!(actions[0].command.as_ref().unwrap().opcode, 3);
+        assert_eq!(actions[1].command.as_ref().unwrap().custom_type, 0xff);
         let json = serde_json::to_value(&actions[0]).unwrap();
         assert_eq!(json["data"], serde_json::json!(purchase));
+        assert_eq!(json["command"]["sender_slot"], 1);
+    }
+
+    #[test]
+    fn decodes_receiver_encodings_and_custom_lengths() {
+        let mut single = vec![250, 0x81, 1, 2, 3, 4];
+        single.extend_from_slice(&0x1000_0007u32.to_be_bytes());
+        single.extend_from_slice(&[7, 3, 1, 2, 3]);
+        let decoded = crate::actions::Command::decode(&single).unwrap();
+        assert_eq!(decoded.sender_slot, 1);
+        assert_eq!(decoded.process_type, 1);
+        assert_eq!(decoded.receivers.len(), 1);
+        assert_eq!(decoded.receivers[0].kind, 1);
+        assert_eq!(decoded.receivers[0].instance_id, 7);
+        assert_eq!(decoded.custom_length, Some(3));
+        assert_eq!(decoded.custom_data, vec![1, 2, 3]);
+
+        for prefix in [
+            vec![0x42, 1, 0, 0, 0, 2, 0, 0, 0],
+            vec![0x80, 0x02, 1, 0, 0, 0, 2, 0, 0, 0],
+            vec![0xc0, 0, 0, 2, 1, 0, 0, 0, 2, 0, 0, 0],
+        ] {
+            let mut body = vec![251, 0, 0, 0, 0, 0];
+            body.extend_from_slice(&prefix);
+            body.push(0xff);
+            let decoded = crate::actions::Command::decode(&body).unwrap();
+            assert_eq!(decoded.receivers.len(), 2);
+            assert_eq!(decoded.receivers[0].instance_id, 1);
+            assert_eq!(decoded.receivers[1].instance_id, 2);
+            assert_eq!(decoded.custom_length, None);
+        }
+
+        let custom_size = 0x1234usize;
+        let mut body = vec![252, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x15, 0x92, 0x34];
+        body.extend(std::iter::repeat(0xcd).take(custom_size));
+        let decoded = crate::actions::Command::decode(&body).unwrap();
+        assert_eq!(decoded.custom_length, Some(custom_size as u16));
+        assert_eq!(decoded.custom_data.len(), custom_size);
     }
 
     #[test]
@@ -390,18 +438,45 @@ mod tests {
     }
 
     #[test]
+    fn retains_unknown_outer_records() {
+        let mut cursor = record(&[9, 8, 7]);
+        cursor.get_mut()[..4].copy_from_slice(&99u32.to_le_bytes());
+        let len = cursor.get_ref().len() as u64;
+        let mut replay = ReplayInfo::default();
+        parse_ticks(&mut cursor, &mut replay, len).unwrap();
+        assert_eq!(replay.unknown_records.len(), 1);
+        assert_eq!(replay.unknown_records[0].record_type, 99);
+        assert_eq!(replay.unknown_records[0].payload, vec![9, 8, 7]);
+    }
+
+    #[test]
     fn parses_existing_samples() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        for (name, ticks, actions, messages) in [
-            ("3v3.rec", 16779, 256, 27),
-            ("recs/1.rec", 11760, 355, 34),
-            ("recs/purchases_SM.rec", 5988, 357, 0),
-            ("recs/upgrades.rec", 1530, 24, 0),
-            ("recs/unit_transformation_and_abilities.rec", 2332, 30, 0),
+        for (name, ticks, actions, commands, messages) in [
+            ("3v3.rec", 16779, 256, 16449, 27),
+            ("recs/1.rec", 11760, 355, 2832, 34),
+            ("recs/purchases_SM.rec", 5988, 357, 715, 0),
+            ("recs/upgrades.rec", 1530, 24, 211, 0),
+            (
+                "recs/unit_transformation_and_abilities.rec",
+                2332,
+                30,
+                227,
+                0,
+            ),
         ] {
             let replay = parse_replay(&root.join(name)).unwrap();
             assert_eq!(replay.ticks, ticks, "{} ticks", name);
             assert_eq!(replay.actions.len(), actions, "{} actions", name);
+            assert_eq!(replay.commands.len(), commands, "{} commands", name);
+            assert!(
+                replay
+                    .commands
+                    .iter()
+                    .all(|action| action.command.is_some()),
+                "{} commands should decode structurally",
+                name
+            );
             assert_eq!(replay.messages.len(), messages, "{} messages", name);
         }
     }
