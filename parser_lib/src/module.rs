@@ -1,5 +1,5 @@
 //! Minimal parser for Dawn of War II `.module` files (INI-style).
-//! Only the `[attrib:common]` section is read.
+//! Only `[global] Name` and `[attrib:common]` are read.
 
 use std::fs;
 use std::io;
@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct ModuleFile {
+    /// `[global] Name`, used to pick `<Name>.ucs`.
+    pub name: Option<String>,
     /// Raw backslash paths relative to the install dir, ordered by `folder.NN`.
     pub attrib_folders: Vec<String>,
     /// Raw backslash paths relative to the install dir, ordered by `archive.NN`.
@@ -17,7 +19,8 @@ impl ModuleFile {
     pub fn parse(text: &str) -> ModuleFile {
         let mut folders: Vec<(u32, String)> = Vec::new();
         let mut archives: Vec<(u32, String)> = Vec::new();
-        let mut in_attrib = false;
+        let mut name = None;
+        let mut section = String::new();
 
         for line in text.lines() {
             let line = line.trim();
@@ -25,18 +28,26 @@ impl ModuleFile {
                 continue;
             }
             if line.starts_with('[') {
-                in_attrib = line
-                    .strip_suffix(']')
-                    .map_or(false, |name| name.trim_start_matches('[').trim().eq_ignore_ascii_case("attrib:common"));
-                continue;
-            }
-            if !in_attrib {
+                section = line
+                    .trim_start_matches('[')
+                    .trim_end_matches(']')
+                    .trim()
+                    .to_ascii_lowercase();
                 continue;
             }
             let (key, value) = match line.find('=') {
                 Some(i) => (line[..i].trim().to_ascii_lowercase(), line[i + 1..].trim()),
                 None => continue,
             };
+            if section == "global" {
+                if key == "name" && !value.is_empty() {
+                    name = Some(value.to_string());
+                }
+                continue;
+            }
+            if section != "attrib:common" {
+                continue;
+            }
             let (list, number) = if let Some(n) = key.strip_prefix("folder.") {
                 (&mut folders, n)
             } else if let Some(n) = key.strip_prefix("archive.") {
@@ -52,6 +63,7 @@ impl ModuleFile {
         folders.sort_by_key(|(n, _)| *n);
         archives.sort_by_key(|(n, _)| *n);
         ModuleFile {
+            name,
             attrib_folders: folders.into_iter().map(|(_, v)| v).collect(),
             attrib_archives: archives.into_iter().map(|(_, v)| v).collect(),
         }
@@ -77,7 +89,12 @@ pub fn resolve_path(root: &Path, rel: &str) -> Option<PathBuf> {
         let found = fs::read_dir(&current)
             .ok()?
             .filter_map(Result::ok)
-            .find(|entry| entry.file_name().to_string_lossy().eq_ignore_ascii_case(component))?;
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(component)
+            })?;
         current = found.path();
     }
     Some(current)
@@ -114,11 +131,23 @@ archive.01 = Sound.sga
     }
 
     #[test]
+    fn parses_global_name() {
+        let m = ModuleFile::parse("[global]\nName = Elite\nUCSBaseIndex = 10000000\n[attrib:common]\narchive.01 = A.sga\n");
+        assert_eq!(m.name.as_deref(), Some("Elite"));
+        assert_eq!(m.attrib_archives, vec!["A.sga".to_string()]);
+        assert_eq!(ModuleFile::parse("[attrib:common]\n").name, None);
+    }
+
+    #[test]
     fn resolve_path_is_case_insensitive() {
         let root = env::temp_dir().join(format!("dow2_module_test_{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("Elite").join("Archives")).unwrap();
-        fs::write(root.join("Elite").join("Archives").join("Elite_attrib.sga"), b"").unwrap();
+        fs::write(
+            root.join("Elite").join("Archives").join("Elite_attrib.sga"),
+            b"",
+        )
+        .unwrap();
 
         let resolved = resolve_path(&root, "elite\\ARCHIVES\\\\Elite_Attrib.sga");
         let missing = resolve_path(&root, "Elite\\Nope\\Elite_attrib.sga");

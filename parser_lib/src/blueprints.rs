@@ -3,12 +3,11 @@
 //! positions in these per-kind catalogues.
 
 use std::collections::BTreeSet;
-use std::fs;
 use std::io;
 use std::path::Path;
 
-use crate::module::{resolve_path, ModuleFile};
-use crate::sga::Archive;
+use crate::attrib::AttribMount;
+use crate::module::ModuleFile;
 
 const ATTRIB_DIR: &str = "simulation\\attrib\\";
 const RBF_EXT: &str = ".rbf";
@@ -125,26 +124,15 @@ impl BlueprintCatalogues {
     /// archives are an error; missing folders are skipped, as the game does.
     pub fn from_module(install_dir: &Path, module_file: &Path) -> io::Result<BlueprintCatalogues> {
         let module = ModuleFile::open(module_file)?;
-        let mut all: Vec<String> = Vec::new();
+        Ok(BlueprintCatalogues::from_mount(&AttribMount::open(
+            install_dir,
+            &module,
+        )?))
+    }
 
-        for rel in &module.attrib_archives {
-            let path = resolve_path(install_dir, rel).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("attrib archive not found: {}", rel),
-                )
-            })?;
-            let archive = Archive::open(&path)?;
-            all.extend(archive.entries.into_iter().map(|e| e.path));
-        }
-        for rel in &module.attrib_folders {
-            if let Some(dir) = resolve_path(install_dir, rel) {
-                if dir.is_dir() {
-                    collect_files(&dir, "", &mut all)?;
-                }
-            }
-        }
-        Ok(BlueprintCatalogues::from_paths(all))
+    /// Builds the catalogues from every path visible through `mount`.
+    pub fn from_mount(mount: &AttribMount) -> BlueprintCatalogues {
+        BlueprintCatalogues::from_paths(mount.paths().map(str::to_string))
     }
 
     /// Keeps `.rbf` paths under each kind's directory, lowercases them, strips any prefix before
@@ -202,21 +190,6 @@ pub struct BlueprintCounts {
     pub sbp: usize,
     pub upgrade: usize,
     pub ability: usize,
-}
-
-/// Recursively appends the files under `dir` as backslash-joined paths relative to the walk root.
-fn collect_files(dir: &Path, prefix: &str, out: &mut Vec<String>) -> io::Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let rel = format!("{}{}", prefix, name);
-        if entry.file_type()?.is_dir() {
-            collect_files(&entry.path(), &format!("{}\\", rel), out)?;
-        } else {
-            out.push(rel);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

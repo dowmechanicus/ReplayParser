@@ -9,6 +9,8 @@ extern crate serde_derive;
 extern crate crypto;
 
 #[allow(dead_code)]
+mod attrib;
+#[allow(dead_code)]
 mod blueprints;
 mod chunky;
 mod message;

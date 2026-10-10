@@ -9,6 +9,7 @@ extern crate serde_derive;
 extern crate crypto;
 
 pub mod actions;
+pub mod attrib;
 pub mod blueprints;
 pub mod chunky;
 pub mod message;
