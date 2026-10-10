@@ -16,6 +16,7 @@ pub mod metadata;
 pub mod module;
 mod parse;
 pub mod replay;
+pub mod seats;
 pub mod sga;
 use actions::{Action, Opcode};
 use parse::*;

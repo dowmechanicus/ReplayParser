@@ -8,6 +8,7 @@ use chunky::Player as PlayerChunk;
 
 use crate::message::Message;
 use crate::replay::{ActionBundle, RawRecord, ReplayInfo, SyncRecord};
+use crate::seats::{assign_slots, LobbyBlock};
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -70,6 +71,8 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     let replay_len = cursor.get_ref().len() as u64;
     parse_ticks(&mut cursor, &mut replay, replay_len)?;
 
+    assign_seats(&mut replay);
+    match_player_ids_from_seats(&mut replay);
     match_player_ids_from_messages(&mut replay);
 
     Ok(replay)
@@ -113,6 +116,7 @@ pub fn parse_chunks(
     cursor.set_position(archive_end as u64);
 
     let mut endpos = pos;
+    let mut lobby_blocks = 0u8;
     loop {
         if cursor.position() >= endpos {
             break; // end of header chunks, start of actions
@@ -153,6 +157,11 @@ pub fn parse_chunks(
             continue;
         }
 
+        let lobby_block = lobby_blocks;
+        if name == "DATAINFO" {
+            lobby_blocks = lobby_blocks.wrapping_add(1);
+        }
+
         let parsed = match chunky::parse(cursor) {
             Ok(chunk) => chunk,
             Err(_) => {
@@ -169,8 +178,15 @@ pub fn parse_chunks(
             Chunk::Data(DataChunk { duration }) => replay.ticks = duration,
             c @ Chunk::Map { .. } => replay.map = c,
             c @ Chunk::Game { .. } => replay.game = c,
-            c @ Chunk::Player { .. } => {
-                if let Chunk::Player(PlayerChunk { kind, .. }) = c {
+            mut c @ Chunk::Player { .. } => {
+                if let Chunk::Player(PlayerChunk {
+                    kind,
+                    lobby_block: block,
+                    ..
+                }) = &mut c
+                {
+                    *block = lobby_block;
+                    let kind = *kind;
                     if kind == 2 || kind == 5 {
                         replay.observers.push(c)
                     } else if kind != 7 {
@@ -439,6 +455,68 @@ pub fn parse_message(cursor: &mut Cursor<Vec<u8>>, tick: u32) -> Result<Message,
     })
 }
 
+/// Fills `slot` and `player_id` on the players the engine seated.
+fn assign_seats(replay: &mut ReplayInfo) {
+    let random_seed = match &replay.game {
+        Chunk::Game(game) => game.random_seed,
+        _ => return,
+    };
+    let random_locations = matches!(&replay.game, Chunk::Game(g) if g.locations == "Random");
+    let max_players = match &replay.map {
+        Chunk::Map(map) => map.maxplayers,
+        _ => return,
+    };
+    let blocks: Vec<LobbyBlock> = replay
+        .players
+        .iter()
+        .chain(replay.observers.iter())
+        .filter_map(|chunk| match chunk {
+            Chunk::Player(p) => Some(LobbyBlock {
+                block: p.lobby_block,
+                kind: p.kind,
+                team: p.team,
+            }),
+            _ => None,
+        })
+        .collect();
+    let seats = match assign_slots(&blocks, random_seed, random_locations, max_players) {
+        Some(seats) => seats,
+        None => return,
+    };
+    for chunk in replay.players.iter_mut() {
+        if let Chunk::Player(p) = chunk {
+            if let Some(&(_, slot)) = seats.iter().find(|(block, _)| *block == p.lobby_block) {
+                p.slot = Some(slot);
+                p.player_id = Some(1000 + slot as u32);
+            }
+        }
+    }
+}
+
+/// Names every action whose sender slot belongs to a seated player.
+fn match_player_ids_from_seats(replay: &mut ReplayInfo) {
+    let mut seated = HashMap::new();
+    for player in replay.players.iter() {
+        if let Chunk::Player(p) = player {
+            if let Some(slot) = p.slot {
+                seated.insert(slot, (p.name.clone(), p.relic_id));
+            }
+        }
+    }
+
+    for action in replay.actions.iter_mut().chain(replay.commands.iter_mut()) {
+        // Same derivation as Command::decode: low 7 bits of the sender byte.
+        let slot = match action.data.get(1) {
+            Some(flags) => flags & 0x7f,
+            None => continue,
+        };
+        if let Some((name, relic_id)) = seated.get(&slot) {
+            action.player = name.clone();
+            action.relic_id = *relic_id;
+        }
+    }
+}
+
 fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
     let mut player_map = HashMap::new();
     let mut relic_id_map = HashMap::new();
@@ -454,6 +532,10 @@ fn match_player_ids_from_messages(replay: &mut ReplayInfo) {
     }
 
     for action in replay.actions.iter_mut().chain(replay.commands.iter_mut()) {
+        // Seat attribution takes precedence; this is only the fallback.
+        if !action.player.is_empty() {
+            continue;
+        }
         // data[1] carries the sender/slot flags. Message.player_id joins on
         // the low byte of the first metadata word at data[2..4] in the
         // inspected files; keep this compatibility key distinct from the
@@ -765,5 +847,65 @@ mod tests {
             );
             assert_eq!(replay.messages.len(), messages, "{} messages", name);
         }
+    }
+
+    fn seats(name: &str) -> (ReplayInfo, Vec<(String, u8, Option<u8>)>) {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let replay = parse_replay(&root.join(name)).unwrap();
+        let mut seats = Vec::new();
+        for chunk in replay.players.iter().chain(replay.observers.iter()) {
+            if let Chunk::Player(p) = chunk {
+                assert_eq!(p.player_id, p.slot.map(|slot| 1000 + slot as u32));
+                seats.push((p.name.clone(), p.lobby_block, p.slot));
+            }
+        }
+        (replay, seats)
+    }
+
+    #[test]
+    fn assigns_seats_in_3v3_sample() {
+        let (replay, seats) = seats("3v3.rec");
+        match &replay.game {
+            Chunk::Game(game) => assert_eq!(game.random_seed, 1445643909),
+            _ => panic!("expected a game chunk"),
+        }
+        let slot = |name: &str| seats.iter().find(|s| s.0 == name).unwrap().2;
+        let names = [
+            "Myrdal",
+            "Aguxyz",
+            "[Encrypted]F???",
+            "Wise Windu",
+            "Floid",
+            "Asmondeus",
+        ];
+        for (expected, name) in names.iter().enumerate() {
+            assert_eq!(slot(name), Some(expected as u8), "{}", name);
+        }
+        assert_eq!(slot("Magnus the Red"), None);
+        assert_eq!(slot("[DOOM] The Antagonist"), None);
+
+        let mut blocks: Vec<u8> = seats.iter().map(|s| s.1).collect();
+        let in_file_order = blocks.clone();
+        blocks.sort();
+        assert_eq!(in_file_order.len(), 8);
+        assert_eq!(blocks, (0..8).collect::<Vec<u8>>());
+
+        for action in replay.commands.iter().chain(replay.actions.iter()) {
+            let sender = action.data[1] & 0x7f;
+            if sender <= 5 {
+                assert_eq!(action.player, names[sender as usize]);
+            }
+        }
+    }
+
+    #[test]
+    fn assigns_seats_in_one_on_one_sample() {
+        let (replay, seats) = seats("recs/1.rec");
+        match &replay.game {
+            Chunk::Game(game) => assert_eq!(game.random_seed, 1497041141),
+            _ => panic!("expected a game chunk"),
+        }
+        assert!(seats.contains(&("RTS Cult".to_string(), 0, Some(0))));
+        assert!(seats.contains(&("The great Cornholio".to_string(), 4, Some(1))));
     }
 }

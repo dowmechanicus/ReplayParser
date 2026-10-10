@@ -14,6 +14,7 @@ mod message;
 mod metadata;
 mod parse;
 mod replay;
+mod seats;
 use parse::*;
 mod actions;
 
