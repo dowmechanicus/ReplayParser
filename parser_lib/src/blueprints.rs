@@ -13,7 +13,7 @@ const ATTRIB_DIR: &str = "simulation\\attrib\\";
 const RBF_EXT: &str = ".rbf";
 
 /// Blueprint namespace, each backed by one directory under `simulation\attrib\`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BlueprintKind {
     Ebp,
@@ -40,6 +40,16 @@ impl BlueprintKind {
         }
     }
 
+    /// Key path from the RBF root to the blueprint's `screen_name` UCS id.
+    pub fn screen_name_path(self) -> &'static [&'static str] {
+        match self {
+            BlueprintKind::Ebp => &["ui_ext", "screen_name"],
+            BlueprintKind::Sbp => &["squad_ui_ext", "screen_name"],
+            BlueprintKind::Upgrade => &["upgrade_bag", "ui_info", "screen_name"],
+            BlueprintKind::Ability => &["ability_bag", "ui", "ui_info", "screen_name"],
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             BlueprintKind::Ebp => "ebp",
@@ -59,6 +69,9 @@ pub struct ResolvedBlueprint {
     pub name: String,
     /// Path relative to the kind's directory, without `.rbf`, backslash-separated.
     pub path: String,
+    /// Localised screen name, when the module's locale data is available and the blueprint has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
 }
 
 /// Sorted, deduplicated list of lowercased `.rbf` paths of one kind, each starting at
@@ -106,6 +119,7 @@ impl BlueprintCatalogue {
             index,
             name: self.name(index)?.to_string(),
             path: self.path(index)?.to_string(),
+            display_name: None,
         })
     }
 }

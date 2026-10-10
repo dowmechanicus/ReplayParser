@@ -15,6 +15,7 @@ pub mod chunky;
 pub mod message;
 pub mod metadata;
 pub mod module;
+pub mod names;
 mod parse;
 pub mod rbf;
 pub mod replay;
@@ -23,7 +24,7 @@ pub mod sga;
 pub mod ucs;
 use actions::Action;
 use parse::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 pub fn parse_file(file_path: String) -> Option<String> {
     let path = Path::new(&file_path);
@@ -109,6 +110,32 @@ pub fn resolve_blueprints(
     };
     resolve(&mut replay.commands);
     resolve(&mut replay.actions);
+}
+
+/// Fills `display_name` on every resolved blueprint, reading each distinct blueprint once. A
+/// blueprint whose file can't be read or parsed keeps no name and is reported once on stderr.
+pub fn resolve_display_names(replay: &mut replay::ReplayInfo, display: &names::DisplayNames) {
+    let mut cache: HashMap<(blueprints::BlueprintKind, String), Option<String>> = HashMap::new();
+    let mut fill = |actions: &mut Vec<Action>| {
+        for bp in actions
+            .iter_mut()
+            .filter_map(|a| a.command.as_mut())
+            .filter_map(|c| c.blueprint.as_mut())
+        {
+            let name = cache
+                .entry((bp.kind, bp.path.clone()))
+                .or_insert_with(|| match display.screen_name(bp.kind, &bp.path) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        eprintln!("warning: no display name for {} {}: {}", bp.kind.as_str(), bp.path, e);
+                        None
+                    }
+                });
+            bp.display_name = name.clone();
+        }
+    };
+    fill(&mut replay.commands);
+    fill(&mut replay.actions);
 }
 
 pub fn parse_raw(file_path: String) -> Result<replay::ReplayInfo> {
@@ -268,5 +295,69 @@ mod tests {
             ),
             (2, 2, 2, 2)
         );
+    }
+
+    #[test]
+    fn corrupt_rbf_only_affects_that_blueprint() {
+        use crate::attrib::AttribMount;
+        use crate::rbf::{build_flb, build_rbf, FieldNames};
+        use crate::sga::{Archive, Entry, Storage};
+        use crate::ucs::UcsTable;
+
+        let fields = ["ability_bag", "ui", "ui_info", "screen_name", "ui_ext", "squad_ui_ext", "upgrade_bag"];
+        let files: Vec<(&str, Vec<u8>)> = vec![
+            ("simulation\\attrib\\fieldnames.flb", build_flb(&fields)),
+            ("simulation\\attrib\\ebps\\bad.rbf", b"garbage".to_vec()),
+            (
+                "simulation\\attrib\\ebps\\good.rbf",
+                build_rbf(&[(1, 0), (1, 1)], &[], &[(4, 4, 1), (2, 3, 100)], &[]),
+            ),
+        ];
+        let mut blob = Vec::new();
+        let mut entries = Vec::new();
+        for (path, bytes) in &files {
+            entries.push(Entry {
+                path: path.to_string(),
+                data_offset: blob.len() as u64,
+                compressed_len: bytes.len() as u32,
+                uncompressed_len: bytes.len() as u32,
+                storage: Storage::Stored,
+            });
+            blob.extend_from_slice(bytes);
+        }
+        let file_path = std::env::temp_dir().join(format!("parser_lib_lib_{}_corrupt", std::process::id()));
+        std::fs::write(&file_path, &blob).unwrap();
+        let mount = AttribMount::from_parts(
+            Vec::new(),
+            vec![(std::fs::File::open(&file_path).unwrap(), Archive { entries })],
+        );
+        // Sorted ebp catalogue: 0 = bad, 1 = good.
+        let catalogues = blueprints::BlueprintCatalogues::from_mount(&mount);
+        let flb = FieldNames::parse(&mount.read("simulation\\attrib\\fieldnames.flb").unwrap()).unwrap();
+        let mut ucs = vec![0xFF, 0xFE];
+        for u in "100\tGen\r\n".encode_utf16() {
+            ucs.extend_from_slice(&u.to_le_bytes());
+        }
+        let display = names::DisplayNames::new(&mount, &flb, UcsTable::parse(&ucs).unwrap()).unwrap();
+
+        let op78 = |index: u32| {
+            let mut data = index.to_le_bytes().to_vec();
+            data.resize(35, 0);
+            action(78, 15, data)
+        };
+        let mut replay = replay::ReplayInfo {
+            commands: vec![op78(1), op78(1), op78(0)],
+            ..Default::default()
+        };
+        resolve_blueprints(&mut replay, &catalogues, "test");
+        resolve_display_names(&mut replay, &display);
+        let shown: Vec<Option<&str>> = replay
+            .commands
+            .iter()
+            .map(|a| {
+                a.command.as_ref().unwrap().blueprint.as_ref().unwrap().display_name.as_deref()
+            })
+            .collect();
+        assert_eq!(shown, vec![Some("Gen"), Some("Gen"), None]);
     }
 }

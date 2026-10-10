@@ -3,7 +3,10 @@ use std::path::Path;
 use std::process;
 
 use parser_lib;
+use parser_lib::attrib::AttribMount;
 use parser_lib::blueprints::BlueprintCatalogues;
+use parser_lib::module::ModuleFile;
+use parser_lib::names::{DisplayNames, DEFAULT_LANGUAGE};
 
 fn main() {
     let mut file = None;
@@ -38,16 +41,28 @@ fn main() {
 
     let module_path = Path::new(&module);
     let install_dir = module_path.parent().unwrap_or_else(|| Path::new("."));
-    let catalogue = match BlueprintCatalogues::from_module(install_dir, module_path) {
-        Ok(catalogue) => catalogue,
+    let module_file = match ModuleFile::open(module_path) {
+        Ok(m) => m,
         Err(e) => {
             eprintln!("could not read module {}: {}", module, e);
             process::exit(1);
         }
     };
+    let mount = match AttribMount::open(install_dir, &module_file) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("could not read module {}: {}", module, e);
+            process::exit(1);
+        }
+    };
+    let catalogue = BlueprintCatalogues::from_mount(&mount);
     match parser_lib::parse_raw(file) {
         Ok(mut replay) => {
             parser_lib::resolve_blueprints(&mut replay, &catalogue, &module);
+            match DisplayNames::load(&mount, install_dir, &module_file, DEFAULT_LANGUAGE) {
+                Ok(names) => parser_lib::resolve_display_names(&mut replay, &names),
+                Err(e) => eprintln!("warning: display names unavailable: {}", e),
+            }
             match parser_lib::to_json(&replay) {
                 Ok(json) => println!("{}", json),
                 Err(e) => println!("error: {}", e),
