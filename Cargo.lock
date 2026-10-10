@@ -172,6 +172,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "color-eyre",
+ "miniz_oxide",
  "rust-crypto",
  "serde",
  "serde_derive",

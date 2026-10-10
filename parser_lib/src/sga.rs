@@ -157,11 +157,7 @@ impl Archive {
                 let uncompressed_len = file_cur.read_u32::<LittleEndian>()?;
                 let _mtime = file_cur.read_u32::<LittleEndian>()?;
                 let _flag = file_cur.read_u8()?;
-                let storage = match file_cur.read_u8()? {
-                    0 => Storage::Stored,
-                    1 => Storage::Zlib,
-                    other => Storage::Unknown(other),
-                };
+                let storage = storage_from_byte(file_cur.read_u8()?);
                 let path = if folder_name.is_empty() {
                     file_name
                 } else {
@@ -177,6 +173,48 @@ impl Archive {
             }
         }
         Ok(Archive { entries })
+    }
+}
+
+/// Maps the TOC storage byte. Bytes 1 and 2 are both zlib streams (`78 DA`); 2 is what every
+/// `.rbf` in the Retribution attrib archives uses. 0 is assumed to mean stored (never observed).
+pub fn storage_from_byte(b: u8) -> Storage {
+    match b {
+        0 => Storage::Stored,
+        1 | 2 => Storage::Zlib,
+        other => Storage::Unknown(other),
+    }
+}
+
+impl Entry {
+    /// Reads this entry's data from the archive stream `r` and inflates it if compressed.
+    pub fn read<R: Read + Seek>(&self, r: &mut R) -> io::Result<Vec<u8>> {
+        let len = r.seek(SeekFrom::End(0))?;
+        let clen = u64::from(self.compressed_len);
+        if self.data_offset > len || clen > len - self.data_offset {
+            return Err(invalid(format!("{}: data out of bounds", self.path)));
+        }
+        r.seek(SeekFrom::Start(self.data_offset))?;
+        let mut raw = vec![0; clen as usize];
+        r.read_exact(&mut raw)?;
+        let ulen = self.uncompressed_len as usize;
+        let data = match self.storage {
+            Storage::Stored => raw,
+            Storage::Zlib => miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&raw, ulen)
+                .map_err(|e| invalid(format!("{}: zlib error {:?}", self.path, e)))?,
+            Storage::Unknown(b) => {
+                return Err(invalid(format!("{}: unsupported storage {}", self.path, b)))
+            }
+        };
+        if data.len() != ulen {
+            return Err(invalid(format!(
+                "{}: got {} bytes, expected {}",
+                self.path,
+                data.len(),
+                ulen
+            )));
+        }
+        Ok(data)
     }
 }
 
@@ -330,5 +368,116 @@ mod tests {
                 .count();
             assert_eq!(count, expected, "{}", name);
         }
+    }
+
+    fn zlib_entry(payload: &[u8], prefix: usize) -> (Vec<u8>, Entry) {
+        let z = miniz_oxide::deflate::compress_to_vec_zlib(payload, 6);
+        let mut bytes = vec![0u8; prefix];
+        bytes.extend_from_slice(&z);
+        let entry = Entry {
+            path: "simulation\\attrib\\x.rbf".to_string(),
+            data_offset: prefix as u64,
+            compressed_len: z.len() as u32,
+            uncompressed_len: payload.len() as u32,
+            storage: Storage::Zlib,
+        };
+        (bytes, entry)
+    }
+
+    #[test]
+    fn storage_bytes_1_and_2_are_zlib() {
+        assert_eq!(storage_from_byte(0), Storage::Stored);
+        assert_eq!(storage_from_byte(1), Storage::Zlib);
+        assert_eq!(storage_from_byte(2), Storage::Zlib);
+        assert_eq!(storage_from_byte(7), Storage::Unknown(7));
+    }
+
+    #[test]
+    fn reads_zlib_entry() {
+        let payload = b"RBF V0.1 payload payload payload";
+        let (bytes, entry) = zlib_entry(payload, 260);
+        assert_eq!(
+            entry.read(&mut Cursor::new(bytes)).unwrap(),
+            payload.to_vec()
+        );
+    }
+
+    #[test]
+    fn reads_stored_entry() {
+        let mut bytes = vec![0u8; 8];
+        bytes.extend_from_slice(b"abcd");
+        let entry = Entry {
+            path: "a".to_string(),
+            data_offset: 8,
+            compressed_len: 4,
+            uncompressed_len: 4,
+            storage: Storage::Stored,
+        };
+        assert_eq!(
+            entry.read(&mut Cursor::new(bytes)).unwrap(),
+            b"abcd".to_vec()
+        );
+    }
+
+    #[test]
+    fn read_rejects_truncated_data() {
+        let (mut bytes, entry) = zlib_entry(b"hello hello hello", 4);
+        bytes.truncate(bytes.len() - 1);
+        let err = entry.read(&mut Cursor::new(bytes)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn read_rejects_corrupt_zlib() {
+        let (mut bytes, entry) = zlib_entry(b"hello hello hello", 0);
+        for b in bytes.iter_mut().skip(2) {
+            *b ^= 0xFF;
+        }
+        assert_eq!(
+            entry.read(&mut Cursor::new(bytes)).unwrap_err().kind(),
+            ErrorKind::InvalidData
+        );
+    }
+
+    #[test]
+    fn read_rejects_length_mismatch() {
+        let (bytes, mut entry) = zlib_entry(b"hello hello hello", 0);
+        entry.uncompressed_len += 1;
+        assert_eq!(
+            entry.read(&mut Cursor::new(bytes)).unwrap_err().kind(),
+            ErrorKind::InvalidData
+        );
+    }
+
+    #[test]
+    fn read_rejects_unknown_storage() {
+        let (bytes, mut entry) = zlib_entry(b"x", 0);
+        entry.storage = Storage::Unknown(9);
+        assert!(entry.read(&mut Cursor::new(bytes)).is_err());
+    }
+
+    #[test]
+    #[ignore]
+    fn real_archive_reads_sm_generator() {
+        let install = match env::var_os("DOW2_INSTALL") {
+            Some(v) => std::path::PathBuf::from(v),
+            None => return,
+        };
+        let path = install.join("Elite/Archives/Elite_attrib.sga");
+        let archive = Archive::open(&path).unwrap();
+        let entry = archive
+            .entries
+            .iter()
+            .find(|e| {
+                e.path
+                    .to_ascii_lowercase()
+                    .ends_with("ebps\\pvp\\race_marine\\buildings\\sm_generator.rbf")
+            })
+            .unwrap();
+        assert_eq!((entry.compressed_len, entry.uncompressed_len), (2521, 5913));
+        assert_eq!(entry.storage, Storage::Zlib);
+        let data = entry.read(&mut File::open(&path).unwrap()).unwrap();
+        assert_eq!(data.len(), 5913);
+        assert_eq!(&data[..8], b"RBF V0.1");
     }
 }
