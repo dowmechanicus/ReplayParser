@@ -486,7 +486,8 @@ Caveats: these indices are build-specific. Older replays (`3v3.rec` 3722732858,
 in-range but wrong names against this install, so no out-of-range warning
 fires. `mod_chksum` cannot yet be computed from the archives; its association
 with this install rests on the 100% fit. Display names (UCS) are stored in the
-RBFs as plain `u32` ids and are a feasible follow-up, not implemented.
+RBFs as plain `u32` ids; how they are read and resolved is documented in
+[`game-data-formats.md`](game-data-formats.md).
 
 ## Proven versus unresolved
 

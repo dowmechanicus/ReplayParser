@@ -100,9 +100,10 @@ For the build with `mod_chksum` 4156674300 (`0xf7c1d0fc`) the counts are ebp 259
 sbp 715, upgrade 1751, ability 2399.
 
 Each command whose (opcode, custom tag, length) is a verified blueprint form
-gets `command.blueprint = {"kind","index","name","path"}` (`name` is the file
+gets `command.blueprint = {"kind","index","name","path","display_name"}` (`name` is the file
 stem, `path` the path relative to the namespace directory; basenames can
-collide across directories, so use `path` when in doubt). Resolved forms:
+collide across directories, so use `path` when in doubt; `display_name` is the
+readable name, see below). Resolved forms:
 
 | opcode | form | kind | status |
 |---|---|---|---|
@@ -138,18 +139,43 @@ Real output for `temp.rec` (`ReplayInfo.blueprints`, then two commands, trimmed)
 {"opcode": 78, "opcode_name": "PCMD_ConstructStructure", "sender_slot": 4,
  "custom": {"tag": 15, "length": 35, "data": [174, 1, 0, 0, ...]},
  "blueprint": {"kind": "ebp", "index": 430, "name": "csm_listening_post",
-   "path": "pvp\\race_chaos\\buildings\\csm_listening_post"}}
+   "path": "pvp\\race_chaos\\buildings\\csm_listening_post",
+   "display_name": "Chaos Power Node"}}
 
 {"opcode": 85, "opcode_name": "PCMD_Ability", "sender_slot": 5,
  "custom": {"tag": 26, "length": 19, "data": [34, 3, 0, 0, ...]},
  "blueprint": {"kind": "ability", "index": 802, "name": "ig_spawn_stormtroopers",
-   "path": "pvp\\race_imperial_guard\\globals\\ig_spawn_stormtroopers"}}
+   "path": "pvp\\race_imperial_guard\\globals\\ig_spawn_stormtroopers",
+   "display_name": "Infiltrated Storm Troopers"}}
 ```
 
-Display names (the UCS screen names such as "SM Power Generator") are not
-resolved. RBF files store UCS ids as plain `u32`s and the UCS files are UTF-16LE
-`id<TAB>text`, so this is feasible as a follow-up (needs a small RBF table reader
-to find `ui_info\screen_name`); it is not implemented.
+### Display names
+
+With `--module`, each resolved `blueprint` also gets `display_name`: the blueprint's
+`screen_name` (a localisation id stored in its RBF attribute file), looked up in
+`DOW2.ucs` plus `<module name>.ucs` (`Elite.ucs`) from `GameAssets\Locale\English\`
+and trimmed. Only English is supported and there is no language flag. For `temp.rec`
+every one of the 1014 `blueprint` objects (counting `commands` and `actions`) has a
+`display_name`, with empty stderr; the 166 distinct blueprints of that replay all resolve.
+
+- **Fallback.** `display_name` is absent (not `null`) when the blueprint has no
+  name: no `screen_name` field, id 0, or an id missing from the UCS files. `name` and
+  `path` are always there.
+- **Warnings (stderr).** `warning: display names unavailable: <error>` once, if the
+  name data cannot be loaded (no `fieldnames.flb`, `DOW2.ucs` or locale folder, or a
+  needed field name missing); no `display_name` is then written. A blueprint whose RBF
+  is missing or malformed prints `warning: no display name for <kind> <path>: <error>`
+  once and is left without a name. Neither stops the parse.
+- **Names are not unique** ("Repair" belongs to three blueprints), so use `path` as the
+  identity. Reinforce (opcode 49) resolves to the *model* entity, and some models carry another
+  unit's string (ebp `sm_sternguard_veteran` shows "Tactical Marine"), so the name can differ
+  from the squad that was reinforced.
+- **Other builds.** On a replay from another build than the installed one, display
+  names are as wrong as the indices (see above), but they read more convincingly than a
+  file stem. Compare `mod_chksum` before trusting either.
+
+The RBF, field-name and UCS formats, the archive override rule and what is verified or
+hypothesis are in [`docs/game-data-formats.md`](docs/game-data-formats.md).
 
 ## Historical action observations
 
