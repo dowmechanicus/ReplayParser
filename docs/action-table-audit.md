@@ -418,8 +418,11 @@ The archive names and old “Item ID” table remain annotations rather than a
 cross-build catalogue: the indices are clean per-type catalogue positions,
 but the catalogue is a function of the exact mounted file set. A name-to-ID
 claim requires the attribute archives of the build that recorded the replay,
-keyed by the replay header's data checksum. The available SGA overlays belong
-to other builds (whole annotated race blocks match at constant offsets, which
+keyed by the replay header's data checksum. The installed Elite archives match
+`temp.rec` and one further replay with `mod_chksum` 4156674300, where the
+name-to-index mapping is now verified (1,092 commands, 100% race-consistent;
+rule in `docs/replay-format.md`). The same overlays belong to other builds for
+`3v3.rec` and `recs/*` (whole annotated race blocks match at constant offsets, which
 is exactly the signature of an alphabetical index after files were added).
 
 ## Evidence limits

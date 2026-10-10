@@ -332,8 +332,11 @@ shown only `0x65`. Receiver bytes `10 00 78 ad` similarly carry instance
 `0x78ad` (30,893), although the old byte is only 173. In `purchases_SM.rec`,
 opcode-3 commands reuse entity instance `0x4a6f` while type-5 values vary, and
 opcode-50 commands target squad instance 50,000 with different custom values.
-These are separate command and runtime namespaces; no name-to-blueprint
-mapping is proven for any token.
+These are separate command and runtime namespaces. A name-to-blueprint mapping
+is proven only for the blueprint-bearing `u32` forms (SBP, EBP, `Upgrade\`,
+`Ability\`) of the build with `mod_chksum` 4156674300 (see "Catalogue rule
+verified for build 4156674300" below); it is not proven for receiver or runtime
+IDs, nor for any other build.
 
 ## How the game assigns IDs
 
@@ -424,8 +427,9 @@ no-team fallback. It is unverified for partial lobbies.
 The attribute loader creates groups in archive/load order. The RB2 path makes a
 first pass that creates groups in entry order and a second pass that reads their
 payloads. The RBF path applies type mappings and enumerates filesystem
-wildcards. The exact within-type ordering is not established here and should
-not be assumed to be alphabetical. Adding a blueprint, changing archive
+wildcards. For the analysed RBF build the within-type order is lowercase-fold
+(`_stricmp`) alphabetical over the full path (see the catalogue rule below);
+the RB2 path is entry order. Adding a blueprint, changing archive
 ordering, or changing the startup scenario changes the numeric assignment
 without changing the human-readable unit name.
 
@@ -436,6 +440,53 @@ number as another unit, and runtime entity/squad IDs can differ even when the
 same blueprint is present. Cross-version comparison requires the matching
 attribute data and the replay's checksum, plus a per-session reconstruction of
 runtime group creation.
+
+### Catalogue rule verified for build 4156674300
+
+VERIFIED for the build with header `mod_chksum` 4156674300 (`0xf7c1d0fc`): for
+each namespace, take every `.rbf` path under `simulation\attrib\<dir>\` across
+the module's `[attrib:common]` archives (Elite_Attrib.sga,
+Elite_Campaign_Attrib.sga, GameAttrib_orig.sga), lowercase it, deduplicate and
+byte-sort it. The index is the position in that list.
+
+| namespace | dir | count | opcodes (field) | evidence |
+|---|---|---:|---|---|
+| EBP (0) | `ebps` | 2591 | 49 (tag 5 u32), 78 / 89 (leading u32 of the 35-byte form) | 293/293 op 49, 79/79 op 78, 3/3 op 89 race-consistent |
+| SBP (1) | `sbps` | 715 | 3 (tag 5 u32) | 61/61 race-consistent |
+| Upgrade (5) | `upgrade` | 1751 | 15, 50 (tag 5 u32) | 18/18 op 15, 116/116 op 50 |
+| Ability (6) | `ability` | 2399 | 53 (verified for tags 25 and 26), 85 (verified for tags 25, 26, 28 and 29); leading u32, resolver accepts tags 25..=29 | 508/508 op 53, 14/14 op 85 |
+
+Evidence: `temp.rec` plus a second current-build replay, 1,092 resolved
+commands across seven players (SM, CSM, IG, Tau), all race-consistent, none
+out of range. Hero-specific purchases, abilities and turrets match each
+player's lobby hero choice, and causal order holds (e.g. a wargear purchase
+precedes the ability it unlocks).
+
+Opcode status: 3, 15, 49, 50, 53, 78, 85 verified; 89 verified but thin (3
+commands); 13 `CMD_Ability` is a hypothesis (seen only in the old-build
+`3v3.rec`); 90 and 4/16/63/64 are documented in the audit only, never observed.
+Global/commander abilities are opcode 85 and resolve into
+`ability\pvp\race_*\globals\` (14/14); hero abilities are opcode 53 into
+`ability\pvp\race_*\<hero>\`. There is no separate commander namespace.
+
+Alternatives tested: archive entry order fails (e.g. a CSM player's SBP 111
+becomes an Imperial Guard kasrkin squad). Uppercase-fold order differs at 3 of
+197 distinct observed indices; ability 906 decides it (lowercase gives
+`ig_stormtrooper_squad_infiltrate`, a toggled ability; uppercase gives a
+passive that can never be issued), so lowercase fold is verified over uppercase
+fold. Dropping Elite_Attrib.sga breaks the data, so the Elite archive is
+required. Whether Elite_Campaign_Attrib.sga is included is not discriminated by
+the data (its entries sort above every observed index): HYPOTHESIS that it is,
+consistent with the module mount. Whether unmapped directories that sort after
+`ebps\` are folded into type 0 is open; it would only change the EBP catalogue
+length (out-of-range detection), not observed indices.
+
+Caveats: these indices are build-specific. Older replays (`3v3.rec` 3722732858,
+`recs/1.rec` 4277459924, the 2021 corpus files 2388867438) still resolve to
+in-range but wrong names against this install, so no out-of-range warning
+fires. `mod_chksum` cannot yet be computed from the archives; its association
+with this install rests on the 100% fit. Display names (UCS) are stored in the
+RBFs as plain `u32` ids and are a feasible follow-up, not implemented.
 
 ## Proven versus unresolved
 

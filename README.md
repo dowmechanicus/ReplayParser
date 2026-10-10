@@ -80,6 +80,77 @@ it does not embed the complete mod attribute archive. Matching a number to a
 unit name across game or mod versions therefore requires the matching data and
 reconstruction of that session's runtime group creation order.
 
+## Resolving blueprint names (`--module`)
+
+Pass the install's module file to turn blueprint indices into names:
+
+```text
+cargo run -q -p parser -- temp.rec --module "<install>/Elite.module"
+```
+
+The parser reads the module's `[attrib:common]` SGA archives and builds four
+catalogues: `ebp` (`simulation\attrib\ebps\`), `sbp` (`sbps\`), `upgrade` and
+`ability`. The rule is: every `.rbf` path under that directory across all the
+archives, lowercased, deduplicated, byte-sorted; index *i* is the *i*-th path.
+Two parts of this rule are not discriminated by the data: including
+`Elite_Campaign_Attrib.sga` is a hypothesis, and whether directories sorting after
+`ebps\` belong to the EBP namespace is open (this affects only the EBP count); see
+`docs/replay-format.md`.
+For the build with `mod_chksum` 4156674300 (`0xf7c1d0fc`) the counts are ebp 2591,
+sbp 715, upgrade 1751, ability 2399.
+
+Each command whose (opcode, custom tag, length) is a verified blueprint form
+gets `command.blueprint = {"kind","index","name","path"}` (`name` is the file
+stem, `path` the path relative to the namespace directory; basenames can
+collide across directories, so use `path` when in doubt). Resolved forms:
+
+| opcode | form | kind | status |
+|---|---|---|---|
+| 3 `CMD_BuildSquad` | tag 5, len 4 | `sbp` | verified |
+| 15 `CMD_Upgrade`, 50 `SCMD_Upgrade` | tag 5, len 4 | `upgrade` | verified |
+| 49 `SCMD_ReinforceUnit` | tag 5, len 4 | `ebp` | verified |
+| 78 `PCMD_ConstructStructure`, 89 `PCMD_ConstructFence` | tag 15 / 16, len 35, leading `u32` | `ebp` | verified (89: only 3 commands seen) |
+| 53 `SCMD_Ability`, 85 `PCMD_Ability` | tags 25..29, len >= 5, leading `u32` | `ability` | 53 verified for tags 25 and 26; 85 verified for tags 25, 26, 28 and 29 (the resolver accepts 25..=29) |
+
+Global (commander) abilities are opcode 85 and resolve into
+`ability\pvp\race_*\globals\`; there is no separate commander namespace.
+Deliberately not resolved: opcode 13 (`CMD_Ability`, unverified), 90 and 4/16/63/64
+(documented only), 5/51 (queue ordinals), 71 (stance), tag-1 forms of 53/85, and 94/96
+(not blueprints).
+
+`ReplayInfo.blueprints` records `module` and the catalogue sizes (`ebp_count`,
+`sbp_count`, `upgrade_count`, `ability_count`). With `--module`, names are always
+resolved; there is no build check.
+
+Indices are build-specific catalogue positions. Resolving a replay recorded on
+another build than the installed one gives wrong names that are still in range,
+without any warning (in the 2015 `3v3.rec` the Imperial Guard player "builds" `gk_*`
+squads). The replay's `mod_chksum` is part of the output, so callers can compare
+builds themselves. `mod_chksum` cannot yet be computed from the archives;
+4156674300 is associated with the analysed install by data fit, not by derivation.
+
+Real output for `temp.rec` (`ReplayInfo.blueprints`, then two commands, trimmed):
+
+```json
+"blueprints": {"module": ".../Elite.module",
+  "ebp_count": 2591, "sbp_count": 715, "upgrade_count": 1751, "ability_count": 2399}
+
+{"opcode": 78, "opcode_name": "PCMD_ConstructStructure", "sender_slot": 4,
+ "custom": {"tag": 15, "length": 35, "data": [174, 1, 0, 0, ...]},
+ "blueprint": {"kind": "ebp", "index": 430, "name": "csm_listening_post",
+   "path": "pvp\\race_chaos\\buildings\\csm_listening_post"}}
+
+{"opcode": 85, "opcode_name": "PCMD_Ability", "sender_slot": 5,
+ "custom": {"tag": 26, "length": 19, "data": [34, 3, 0, 0, ...]},
+ "blueprint": {"kind": "ability", "index": 802, "name": "ig_spawn_stormtroopers",
+   "path": "pvp\\race_imperial_guard\\globals\\ig_spawn_stormtroopers"}}
+```
+
+Display names (the UCS screen names such as "SM Power Generator") are not
+resolved. RBF files store UCS ids as plain `u32`s and the UCS files are UTF-16LE
+`id<TAB>text`, so this is feasible as a follow-up (needs a small RBF table reader
+to find `ui_info\screen_name`); it is not implemented.
+
 ## Historical action observations
 
 # General observations:
