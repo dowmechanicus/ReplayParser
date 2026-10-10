@@ -20,6 +20,7 @@ pub mod rbf;
 pub mod replay;
 pub mod seats;
 pub mod sga;
+pub mod ucs;
 use actions::Action;
 use parse::*;
 use std::collections::BTreeSet;
