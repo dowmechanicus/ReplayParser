@@ -27,10 +27,21 @@ impl Receiver {
     }
 }
 
+/// The custom payload that follows the receiver field of a command.
+///
+/// `tag` is the custom type. `0xff` means no payload, in which case `length` is
+/// `None` and `data` is empty. Otherwise `length` is the byte count of `data`.
+#[derive(Clone, Debug, Serialize)]
+pub struct CustomPayload {
+    pub tag: u8,
+    pub length: Option<u16>,
+    pub data: Vec<u8>,
+}
+
 /// Decoded fields common to every action command, including unknown opcodes.
 ///
 /// The parser only assigns semantics to framing and fields supported by the
-/// inspected serializer. `raw_context` and `custom_data` remain available when
+/// inspected serializer. `raw_context` and `custom.data` remain available when
 /// the game-specific meaning is unknown.
 #[derive(Clone, Debug, Serialize)]
 pub struct Command {
@@ -40,9 +51,7 @@ pub struct Command {
     pub process_type: u8,
     pub raw_context: [u8; 4],
     pub receivers: Vec<Receiver>,
-    pub custom_type: u8,
-    pub custom_length: Option<u16>,
-    pub custom_data: Vec<u8>,
+    pub custom: CustomPayload,
 }
 
 impl Command {
@@ -59,12 +68,16 @@ impl Command {
         let raw_context = [data[2], data[3], data[4], data[5]];
         let mut cursor = Cursor::new(&data[6..]);
         let receivers = read_receivers(&mut cursor)?;
-        let custom_type = cursor.read_u8()?;
-        let (custom_length, custom_data) = if custom_type == 0xff {
+        let tag = cursor.read_u8()?;
+        let custom = if tag == 0xff {
             if cursor.position() != cursor.get_ref().len() as u64 {
                 return Err(invalid("custom type 0xff has payload bytes"));
             }
-            (None, Vec::new())
+            CustomPayload {
+                tag,
+                length: None,
+                data: Vec::new(),
+            }
         } else {
             let high = cursor.read_u8()?;
             let length = if high < 0x80 {
@@ -79,7 +92,11 @@ impl Command {
             }
             let mut bytes = vec![0; length as usize];
             cursor.read_exact(&mut bytes)?;
-            (Some(length), bytes)
+            CustomPayload {
+                tag,
+                length: Some(length),
+                data: bytes,
+            }
         };
 
         Ok(Self {
@@ -89,9 +106,7 @@ impl Command {
             process_type,
             raw_context,
             receivers,
-            custom_type,
-            custom_length,
-            custom_data,
+            custom,
         })
     }
 }

@@ -195,7 +195,8 @@ Both commands emit JSON structural summaries. The inventory reports opcode,
 custom type/length, and receiver-kind counts without publishing payload bytes.
 The Rust parser emits a JSON `commands` array containing every decoded command;
 each command has `opcode`, `sender_flags`, `sender_slot`, `process_type`,
-`raw_context`, `receivers`, `custom_type`, `custom_length`, and `custom_data`.
+`raw_context`, `receivers`, and `custom` (with `custom.tag`,
+`custom.length`, and `custom.data`).
 `data` remains the complete command body for byte-for-byte consumers. The
 legacy `actions` array is filtered for compatibility and should not be used as
 the complete command stream.

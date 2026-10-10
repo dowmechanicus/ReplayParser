@@ -517,7 +517,7 @@ mod tests {
         assert_eq!(actions[1].data, retreat);
         assert_eq!(actions[2].data, purchase);
         assert_eq!(actions[0].command.as_ref().unwrap().opcode, 3);
-        assert_eq!(actions[1].command.as_ref().unwrap().custom_type, 0xff);
+        assert_eq!(actions[1].command.as_ref().unwrap().custom.tag, 0xff);
         let json = serde_json::to_value(&actions[0]).unwrap();
         assert_eq!(json["data"], serde_json::json!(purchase));
         assert_eq!(json["command"]["sender_slot"], 1);
@@ -560,8 +560,8 @@ mod tests {
         assert_eq!(decoded.receivers.len(), 1);
         assert_eq!(decoded.receivers[0].kind, 1);
         assert_eq!(decoded.receivers[0].instance_id, 7);
-        assert_eq!(decoded.custom_length, Some(3));
-        assert_eq!(decoded.custom_data, vec![1, 2, 3]);
+        assert_eq!(decoded.custom.length, Some(3));
+        assert_eq!(decoded.custom.data, vec![1, 2, 3]);
 
         for prefix in [
             vec![0x42, 1, 0, 0, 0, 2, 0, 0, 0],
@@ -575,15 +575,15 @@ mod tests {
             assert_eq!(decoded.receivers.len(), 2);
             assert_eq!(decoded.receivers[0].instance_id, 1);
             assert_eq!(decoded.receivers[1].instance_id, 2);
-            assert_eq!(decoded.custom_length, None);
+            assert_eq!(decoded.custom.length, None);
         }
 
         let custom_size = 0x1234usize;
         let mut body = vec![252, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x15, 0x92, 0x34];
         body.extend(std::iter::repeat(0xcd).take(custom_size));
         let decoded = crate::actions::Command::decode(&body).unwrap();
-        assert_eq!(decoded.custom_length, Some(custom_size as u16));
-        assert_eq!(decoded.custom_data.len(), custom_size);
+        assert_eq!(decoded.custom.length, Some(custom_size as u16));
+        assert_eq!(decoded.custom.data.len(), custom_size);
     }
 
     #[test]
