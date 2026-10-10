@@ -16,6 +16,7 @@ pub mod message;
 pub mod metadata;
 pub mod module;
 mod parse;
+pub mod rbf;
 pub mod replay;
 pub mod seats;
 pub mod sga;
