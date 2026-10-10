@@ -10,6 +10,8 @@ extern crate crypto;
 
 mod chunky;
 mod message;
+#[allow(dead_code)]
+mod metadata;
 mod parse;
 mod replay;
 use parse::*;

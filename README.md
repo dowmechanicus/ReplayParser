@@ -1,12 +1,13 @@
 # Replay format status
 
 The old action tables below are historical observations from a small set of
-replays. They used the wrong fixed-offset framing for command lengths and
-should not be used as an ID catalogue. The current format and the distinction
-between blueprint IDs, purchase values, and runtime receiver IDs are documented
-in [docs/replay-format.md](docs/replay-format.md). Use
-`tools/replay_inspect.py` to validate replay boundaries before investigating
-opcode semantics.
+replays, retained for provenance only. They used the wrong fixed-offset
+framing for command lengths and contain unverified field and ID
+interpretations; they are not a cross-version ID catalogue. The current wire
+format and the distinction between blueprint IDs, purchase values, and runtime
+receiver IDs are documented in [docs/replay-format.md](docs/replay-format.md).
+Use `tools/replay_inspect.py` to validate replay boundaries before assigning
+gameplay meanings to opcode or custom payload values.
 
 # Historical action observations
 
