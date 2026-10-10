@@ -121,6 +121,9 @@ pub struct Command {
     pub raw_context: [u8; 4],
     pub receivers: Vec<Receiver>,
     pub custom: CustomPayload,
+    /// Squad blueprint name for `CMD_BuildSquad`, filled in by
+    /// `resolve_squad_names` when a module catalogue is supplied.
+    pub squad_blueprint: Option<String>,
 }
 
 impl Command {
@@ -176,6 +179,7 @@ impl Command {
             raw_context,
             receivers,
             custom,
+            squad_blueprint: None,
         })
     }
 }
@@ -187,7 +191,8 @@ impl Serialize for Command {
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Command", 8)?;
+        let field_count = 8 + usize::from(self.squad_blueprint.is_some());
+        let mut state = serializer.serialize_struct("Command", field_count)?;
         state.serialize_field("opcode", &self.opcode.value())?;
         state.serialize_field("opcode_name", &self.opcode.name())?;
         state.serialize_field("sender_flags", &self.sender_flags)?;
@@ -196,6 +201,9 @@ impl Serialize for Command {
         state.serialize_field("raw_context", &self.raw_context)?;
         state.serialize_field("receivers", &self.receivers)?;
         state.serialize_field("custom", &self.custom)?;
+        if let Some(name) = &self.squad_blueprint {
+            state.serialize_field("squad_blueprint", name)?;
+        }
         state.end()
     }
 }

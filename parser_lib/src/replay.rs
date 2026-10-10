@@ -32,6 +32,13 @@ pub struct ActionBundle {
     pub commands: Vec<Action>,
 }
 
+/// Module whose SBP catalogue was used to resolve squad names.
+#[derive(Debug, Default, Serialize)]
+pub struct BlueprintSource {
+    pub module: String,
+    pub sbp_count: usize,
+}
+
 #[derive(Default, Serialize)]
 pub struct ReplayInfo {
     pub name: String,
@@ -54,4 +61,6 @@ pub struct ReplayInfo {
     /// Legacy filtered view retained for existing consumers.
     pub actions: Vec<Action>,
     pub unknown_records: Vec<RawRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blueprints: Option<BlueprintSource>,
 }
