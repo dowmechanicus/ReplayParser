@@ -94,6 +94,143 @@ def flatten(chunks: Iterable[Chunk]) -> Iterable[Chunk]:
         yield from flatten(chunk.children)
 
 
+CHUNKY_MAGIC = b"Relic Chunky\r\n\x1a\0"
+
+
+def chunky_signature(data: bytes, offset: int) -> dict[str, int]:
+    """Validate one 36-byte Relic Chunky v3 signature block.
+
+    The replay writer drives two Chunky instances over the same file, so this
+    block appears twice (at 84 and again between FOLDPOST and DATASDSC).  The
+    field names come from Chunky::ConstructInternal in the analysed build.
+    """
+    if offset + 36 > len(data):
+        raise ReplayError(f"short Chunky signature at 0x{offset:x}")
+    if data[offset : offset + 16] != CHUNKY_MAGIC:
+        raise ReplayError(f"missing Relic Chunky magic at 0x{offset:x}")
+    version = u32(data, offset + 16)
+    platform = u32(data, offset + 20)
+    signature_size = u32(data, offset + 24)
+    header_size = u32(data, offset + 28)
+    if version != 3 or signature_size != 0x24 or header_size != 0x1C:
+        raise ReplayError(
+            f"unsupported Chunky signature at 0x{offset:x}: "
+            f"version {version}, sizes 0x{signature_size:x}/0x{header_size:x}"
+        )
+    return {"version": version, "platform": platform}
+
+
+def wide_string(data: bytes, pos: int, limit: int) -> tuple[str, int]:
+    count = u32(data, pos)
+    end = pos + 4 + 2 * count
+    if end > limit:
+        raise ReplayError(f"wide string at 0x{pos:x} runs past 0x{limit:x}")
+    return data[pos + 4 : end].decode("utf-16le", errors="replace"), end
+
+
+def narrow_string(data: bytes, pos: int, limit: int) -> tuple[str, int]:
+    count = u32(data, pos)
+    end = pos + 4 + count
+    if end > limit:
+        raise ReplayError(f"string at 0x{pos:x} runs past 0x{limit:x}")
+    return data[pos + 4 : end].decode("latin-1"), end
+
+
+def parse_player_info(data: bytes, chunk: Chunk) -> dict[str, object]:
+    """Decode one DATAINFO player block (writer at DOW2 0x41a9c1).
+
+    Field names follow docs/replay-format.md; numeric fields whose meaning is
+    only a corpus observation keep neutral names.
+    """
+    if chunk.version != 7:
+        raise ReplayError(f"unsupported DATAINFO version {chunk.version}")
+    pos, limit = chunk.offset + 28, chunk.end
+    name, pos = wide_string(data, pos, limit)
+    kind = u32(data, pos)
+    team = u32(data, pos + 4)
+    pos += 8
+    race, pos = narrow_string(data, pos, limit)
+    if pos + 8 > limit:
+        raise ReplayError("DATAINFO profile ID runs past chunk")
+    profile_id = struct.unpack_from("<Q", data, pos)[0]
+    pos += 8
+    rank = u32(data, pos)
+    observed7 = u32(data, pos + 4)
+    observed8 = u32(data, pos + 8)
+    observed9 = u32(data, pos + 12)
+    pos += 16
+    if pos + 1 > limit:
+        raise ReplayError("DATAINFO flag byte runs past chunk")
+    observed_flag = data[pos]
+    pos += 1
+    rank_repeat = u32(data, pos)
+    pos += 4
+    if pos + 5 > limit:
+        raise ReplayError("DATAINFO appearance bytes run past chunk")
+    appearance = list(data[pos : pos + 5])
+    pos += 5
+    badge, pos = narrow_string(data, pos, limit)
+    badge_crc = u32(data, pos)
+    pos += 4
+    army_name, pos = wide_string(data, pos, limit)
+    race_id = u32(data, pos)
+    pos += 4
+    if pos != limit:
+        raise ReplayError(
+            f"DATAINFO has {limit - pos} undecoded trailing bytes"
+        )
+    if rank_repeat != rank:
+        raise ReplayError("DATAINFO duplicated rank fields disagree")
+    return {
+        "name": name,
+        "kind": kind,
+        "team": team,
+        "race": race,
+        "profile_id": profile_id,
+        "rank": rank,
+        "observed7": observed7,
+        "observed8": observed8,
+        "observed9": observed9,
+        "observed_flag": observed_flag,
+        "appearance": appearance,
+        "badge": badge,
+        "badge_crc": badge_crc,
+        "army_name": army_name,
+        "race_id": race_id,
+    }
+
+
+def parse_chat(payload: bytes, stats: dict[str, object]) -> None:
+    """Decode one type-1 record (serialized RecordedChatCmd)."""
+    if len(payload) < 8:
+        raise ReplayError("chat payload is shorter than its inner framing")
+    inner_kind, inner_size = struct.unpack_from("<II", payload, 0)
+    if inner_kind != 1:
+        raise ReplayError(f"chat inner kind {inner_kind} != 1")
+    if inner_size != len(payload) - 8:
+        raise ReplayError(
+            f"chat inner size {inner_size} != payload size - 8"
+        )
+    pos = 8
+    _name, pos = wide_string(payload, pos, len(payload))
+    if pos + 12 > len(payload):
+        raise ReplayError("chat dwords run past payload")
+    sender_key, zero_field, team_flag = struct.unpack_from("<III", payload, pos)
+    pos += 12
+    _text, pos = wide_string(payload, pos, len(payload))
+    if pos != len(payload):
+        raise ReplayError("chat payload has an unconsumed tail")
+    if not 1000 <= sender_key < 1000 + 128:
+        raise ReplayError(f"chat sender key {sender_key} outside 1000+slot range")
+    stats["chat_records"] = int(stats["chat_records"]) + 1
+    flags = stats["chat_team_flags"]
+    assert isinstance(flags, dict)
+    key = str(team_flag)
+    flags[key] = int(flags.get(key, 0)) + 1
+    if zero_field != 0:
+        stats["chat_nonzero_dword2"] = int(stats.get("chat_nonzero_dword2", 0)) + 1
+
+
 def decode_receiver(body: bytes, pos: int) -> tuple[list[int], int]:
     """Decode the receiver field, retaining the file's mixed byte order."""
     if pos >= len(body):
@@ -164,17 +301,31 @@ def decode_command(body: bytes) -> dict[str, object]:
 
 
 def parse_sync(payload: bytes, stats: dict[str, object]) -> None:
-    if len(payload) < 17 or payload[0] != 0x20:
-        raise ReplayError("sync payload has no 0x20 marker/header")
-    tick, counter, unknown, bundle_count = struct.unpack_from("<IIII", payload, 1)
+    # A type-0 payload is a serialized GameMsgSyncCommand.  The reader in the
+    # analysed build validates only the high nibble of the kind byte.
+    if len(payload) < 17 or payload[0] >> 4 != 2:
+        raise ReplayError("sync payload has no kind-2 marker/header")
+    tick, command_counter, sync_crc, bundle_count = struct.unpack_from(
+        "<IIII", payload, 1
+    )
     stats["sync_records"] = int(stats["sync_records"]) + 1
     stats["ticks_max"] = max(int(stats["ticks_max"]), tick)
+    stats["command_counter_max"] = max(
+        int(stats["command_counter_max"]), command_counter
+    )
+    if sync_crc == 0:
+        stats["sync_crc_zero"] = int(stats["sync_crc_zero"]) + 1
     stats["bundles"] = int(stats["bundles"]) + bundle_count
     pos = 17
     for _ in range(bundle_count):
         if pos + 12 > len(payload):
             raise ReplayError("action bundle header runs past sync payload")
-        opaque = payload[pos : pos + 8]
+        # The eight bundle header bytes are serialized verbatim and are zero
+        # in the whole corpus; count rather than reject a nonzero value.
+        if payload[pos : pos + 8] != b"\0" * 8:
+            stats["bundle_header_nonzero"] = (
+                int(stats["bundle_header_nonzero"]) + 1
+            )
         declared = u32(payload, pos + 8)
         pos += 12
         if pos >= len(payload):
@@ -222,24 +373,35 @@ def inspect(path: Path) -> dict[str, object]:
         "size": len(data),
         "header": header(data),
         "chunks": [],
+        "players": [],
+        "declared_sync_records": 0,
         "sync_records": 0,
         "chat_records": 0,
+        "chat_team_flags": {},
         "bundles": 0,
+        "bundle_header_nonzero": 0,
         "commands": 0,
         "ticks_max": 0,
+        "command_counter_max": 0,
+        "sync_crc_zero": 0,
         "opcodes": {},
     }
-    # The 36-byte Relic Chunky prelude is not a normal chunk.  The first
-    # actual chunk starts at 0x78, followed by a 36-byte metadata gap before
-    # DATASDSC at 0xd8.  This is stable in the supplied public samples.
-    # This is the supported layout for the analysed writer.  Validate the
-    # recognizable chunks around the opaque 36-byte gaps rather than silently
-    # treating an arbitrary offset as a replay.
+    # The replay writer uses two Chunky instances on one file, so the 36-byte
+    # Relic Chunky v3 signature appears at 84 and again between FOLDPOST and
+    # DATASDSC.  Validate both instead of skipping them as opaque gaps.
+    chunky_signature(data, 84)
     first = chunk_at(data, 120, len(data))
     if first.name != "FOLDPOST" or first.end != 180:
         raise ReplayError("unsupported Chunky prelude/FOLDPOST layout")
     if not first.children or first.children[0].name != "DATADATA":
         raise ReplayError("FOLDPOST does not contain DATADATA")
+    datadata = first.children[0]
+    if datadata.size != 4:
+        raise ReplayError("FOLDPOST DATADATA is not a single u32")
+    # The DATADATA u32 is the sync-record count, patched in when recording is
+    # finalized; it is checked against the stream census below.
+    result["declared_sync_records"] = u32(data, datadata.offset + 28)
+    chunky_signature(data, first.end)
     scenario = chunk_at(data, first.end + 36, len(data))
     if scenario.offset != 216 or scenario.name != "DATASDSC":
         raise ReplayError("unsupported scenario Chunky layout")
@@ -249,6 +411,14 @@ def inspect(path: Path) -> dict[str, object]:
             f"expected FOLDINFO after scenario chunk, got {foldinfo.name!r}"
         )
     chunks = [first, scenario, foldinfo]
+    players = result["players"]
+    assert isinstance(players, list)
+    for child in foldinfo.children:
+        if child.name != "FOLDGPLY":
+            continue
+        for grandchild in child.children:
+            if grandchild.name == "DATAINFO":
+                players.append(parse_player_info(data, grandchild))
     stream_start = foldinfo.end
     result["chunks"] = [
         {"name": c.name, "offset": c.offset, "version": c.version, "size": c.size, "end": c.end}
@@ -267,12 +437,17 @@ def inspect(path: Path) -> dict[str, object]:
         if record_type == 0:
             parse_sync(payload, result)
         elif record_type == 1:
-            result["chat_records"] = int(result["chat_records"]) + 1
+            parse_chat(payload, result)
         else:
             raise ReplayError(f"unknown outer record type {record_type} at 0x{pos:x}")
         pos = payload_end
     if pos != len(data):
         raise ReplayError("record stream does not end at EOF")
+    if result["declared_sync_records"] != result["sync_records"]:
+        raise ReplayError(
+            f"FOLDPOST declares {result['declared_sync_records']} sync records, "
+            f"stream contains {result['sync_records']}"
+        )
     return result
 
 
