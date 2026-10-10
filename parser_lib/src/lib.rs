@@ -122,15 +122,20 @@ pub fn resolve_display_names(replay: &mut replay::ReplayInfo, display: &names::D
             .filter_map(|a| a.command.as_mut())
             .filter_map(|c| c.blueprint.as_mut())
         {
-            let name = cache
-                .entry((bp.kind, bp.path.clone()))
-                .or_insert_with(|| match display.screen_name(bp.kind, &bp.path) {
+            let name = cache.entry((bp.kind, bp.path.clone())).or_insert_with(|| {
+                match display.screen_name(bp.kind, &bp.path) {
                     Ok(name) => name,
                     Err(e) => {
-                        eprintln!("warning: no display name for {} {}: {}", bp.kind.as_str(), bp.path, e);
+                        eprintln!(
+                            "warning: no display name for {} {}: {}",
+                            bp.kind.as_str(),
+                            bp.path,
+                            e
+                        );
                         None
                     }
-                });
+                }
+            });
             bp.display_name = name.clone();
         }
     };
@@ -298,13 +303,45 @@ mod tests {
     }
 
     #[test]
+    fn display_name_json_contract() {
+        let mut data = 1u32.to_le_bytes().to_vec();
+        data.resize(35, 0);
+        let mut a = action(78, 15, data);
+        let command = a.command.as_mut().unwrap();
+        let mut bp = blueprints::ResolvedBlueprint {
+            kind: blueprints::BlueprintKind::Ebp,
+            index: 1,
+            name: "n".to_string(),
+            path: "p\\n".to_string(),
+            display_name: Some("X".to_string()),
+        };
+        command.blueprint = Some(bp.clone());
+        let json = serde_json::to_string(command).unwrap();
+        assert!(json.contains("\"display_name\":\"X\""), "{}", json);
+
+        bp.display_name = None;
+        command.blueprint = Some(bp);
+        let json = serde_json::to_string(command).unwrap();
+        assert!(!json.contains("display_name"), "{}", json);
+        assert!(!json.contains("null"), "{}", json);
+    }
+
+    #[test]
     fn corrupt_rbf_only_affects_that_blueprint() {
         use crate::attrib::AttribMount;
         use crate::rbf::{build_flb, build_rbf, FieldNames};
         use crate::sga::{Archive, Entry, Storage};
         use crate::ucs::UcsTable;
 
-        let fields = ["ability_bag", "ui", "ui_info", "screen_name", "ui_ext", "squad_ui_ext", "upgrade_bag"];
+        let fields = [
+            "ability_bag",
+            "ui",
+            "ui_info",
+            "screen_name",
+            "ui_ext",
+            "squad_ui_ext",
+            "upgrade_bag",
+        ];
         let files: Vec<(&str, Vec<u8>)> = vec![
             ("simulation\\attrib\\fieldnames.flb", build_flb(&fields)),
             ("simulation\\attrib\\ebps\\bad.rbf", b"garbage".to_vec()),
@@ -325,20 +362,26 @@ mod tests {
             });
             blob.extend_from_slice(bytes);
         }
-        let file_path = std::env::temp_dir().join(format!("parser_lib_lib_{}_corrupt", std::process::id()));
+        let file_path =
+            std::env::temp_dir().join(format!("parser_lib_lib_{}_corrupt", std::process::id()));
         std::fs::write(&file_path, &blob).unwrap();
         let mount = AttribMount::from_parts(
             Vec::new(),
-            vec![(std::fs::File::open(&file_path).unwrap(), Archive { entries })],
+            vec![(
+                std::fs::File::open(&file_path).unwrap(),
+                Archive { entries },
+            )],
         );
         // Sorted ebp catalogue: 0 = bad, 1 = good.
         let catalogues = blueprints::BlueprintCatalogues::from_mount(&mount);
-        let flb = FieldNames::parse(&mount.read("simulation\\attrib\\fieldnames.flb").unwrap()).unwrap();
+        let flb =
+            FieldNames::parse(&mount.read("simulation\\attrib\\fieldnames.flb").unwrap()).unwrap();
         let mut ucs = vec![0xFF, 0xFE];
         for u in "100\tGen\r\n".encode_utf16() {
             ucs.extend_from_slice(&u.to_le_bytes());
         }
-        let display = names::DisplayNames::new(&mount, &flb, UcsTable::parse(&ucs).unwrap()).unwrap();
+        let display =
+            names::DisplayNames::new(&mount, &flb, UcsTable::parse(&ucs).unwrap()).unwrap();
 
         let op78 = |index: u32| {
             let mut data = index.to_le_bytes().to_vec();
@@ -355,7 +398,14 @@ mod tests {
             .commands
             .iter()
             .map(|a| {
-                a.command.as_ref().unwrap().blueprint.as_ref().unwrap().display_name.as_deref()
+                a.command
+                    .as_ref()
+                    .unwrap()
+                    .blueprint
+                    .as_ref()
+                    .unwrap()
+                    .display_name
+                    .as_deref()
             })
             .collect();
         assert_eq!(shown, vec![Some("Gen"), Some("Gen"), None]);

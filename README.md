@@ -159,11 +159,12 @@ every one of the 1014 `blueprint` objects (counting `commands` and `actions`) ha
 `display_name`, with empty stderr; the 166 distinct blueprints of that replay all resolve.
 
 - **Fallback.** `display_name` is absent (not `null`) when the blueprint has no
-  name: no `screen_name` field, id 0, or an id missing from the UCS files. `name` and
+  name: no `screen_name` field, id 0, an id missing from the UCS files, or blank UCS text. `name` and
   `path` are always there.
 - **Warnings (stderr).** `warning: display names unavailable: <error>` once, if the
-  name data cannot be loaded (no `fieldnames.flb`, `DOW2.ucs` or locale folder, or a
-  needed field name missing); no `display_name` is then written. A blueprint whose RBF
+  name data cannot be loaded (no `fieldnames.flb`, `DOW2.ucs` or locale folder, a
+  needed field name missing, or `fieldnames.flb`, `DOW2.ucs` or `<Name>.ucs` present but
+  malformed; a corrupt `<Name>.ucs` drops all names); no `display_name` is then written. A blueprint whose RBF
   is missing or malformed prints `warning: no display name for <kind> <path>: <error>`
   once and is left without a name. Neither stops the parse.
 - **Names are not unique** ("Repair" belongs to three blueprints), so use `path` as the

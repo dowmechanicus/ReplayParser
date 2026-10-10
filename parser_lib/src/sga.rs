@@ -186,9 +186,16 @@ pub fn storage_from_byte(b: u8) -> Storage {
     }
 }
 
+/// Largest compressed or uncompressed entry size `Entry::read` accepts. Well above the largest
+/// real RBF; it stops a corrupt table of contents from forcing a huge allocation.
+const MAX_ENTRY_LEN: u32 = 64 * 1024 * 1024;
+
 impl Entry {
     /// Reads this entry's data from the archive stream `r` and inflates it if compressed.
     pub fn read<R: Read + Seek>(&self, r: &mut R) -> io::Result<Vec<u8>> {
+        if self.compressed_len > MAX_ENTRY_LEN || self.uncompressed_len > MAX_ENTRY_LEN {
+            return Err(invalid(format!("{}: entry too large", self.path)));
+        }
         let len = r.seek(SeekFrom::End(0))?;
         let clen = u64::from(self.compressed_len);
         if self.data_offset > len || clen > len - self.data_offset {
@@ -447,6 +454,22 @@ mod tests {
             entry.read(&mut Cursor::new(bytes)).unwrap_err().kind(),
             ErrorKind::InvalidData
         );
+    }
+
+    #[test]
+    fn read_rejects_oversized_lengths() {
+        for (c, u) in [(MAX_ENTRY_LEN + 1, 4), (4, MAX_ENTRY_LEN + 1)] {
+            let entry = Entry {
+                path: "a".to_string(),
+                data_offset: 0,
+                compressed_len: c,
+                uncompressed_len: u,
+                storage: Storage::Zlib,
+            };
+            let err = entry.read(&mut Cursor::new(vec![0u8; 8])).unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::InvalidData);
+            assert!(err.to_string().contains("too large"));
+        }
     }
 
     #[test]

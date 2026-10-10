@@ -289,7 +289,9 @@ HYPOTHESIS (the engine rule was not observed): load `DOW2.ucs` plus `<[global] n
 `dev_pipeline.ini` has `Locale = English`.
 
 The parser loads exactly those two files. `DOW2.ucs` is required; a missing `<name>.ucs`, or a
-module with no name, is skipped silently. When two files hold the same id the first one loaded
+module with no name, is skipped silently. A `<name>.ucs` that is present but malformed is not
+skipped: names are unavailable (one warning, no `display_name` anywhere), as for a malformed
+`DOW2.ucs` or `fieldnames.flb`. When two files hold the same id the first one loaded
 (`DOW2.ucs`) wins.
 
 `Elite_campaign.ucs` is **not loaded**. It is presumably for the campaign. 156 `screen_name`

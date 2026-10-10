@@ -99,7 +99,8 @@ impl AttribMount {
         }
     }
 
-    /// Contents of the winning copy of `path`.
+    /// Contents of the winning copy of `path`. Reads share each archive's file cursor, so the
+    /// mount must not be read from several threads at once.
     pub fn read(&self, path: &str) -> io::Result<Vec<u8>> {
         match self.index.get(&normalize(path)) {
             Some(Source::Folder(full)) => fs::read(full),

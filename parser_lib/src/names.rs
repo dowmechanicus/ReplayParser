@@ -25,6 +25,13 @@ fn not_found(msg: String) -> Error {
     Error::new(ErrorKind::NotFound, msg)
 }
 
+/// Reads and parses a UCS file; errors name the file.
+fn read_ucs(path: &Path) -> io::Result<UcsTable> {
+    fs::read(path)
+        .and_then(|bytes| UcsTable::parse(&bytes))
+        .map_err(|e| Error::new(e.kind(), format!("{}: {}", path.display(), e)))
+}
+
 impl<'m> DisplayNames<'m> {
     pub fn load(
         mount: &'m AttribMount,
@@ -37,10 +44,10 @@ impl<'m> DisplayNames<'m> {
             .ok_or_else(|| not_found(format!("locale folder for {} not found", language)))?;
         let dow2 = resolve_path(&locale, "DOW2.ucs")
             .ok_or_else(|| not_found(format!("DOW2.ucs not found in {}", locale.display())))?;
-        let mut ucs = UcsTable::parse(&fs::read(dow2)?)?;
+        let mut ucs = read_ucs(&dow2)?;
         if let Some(name) = &module.name {
             if let Some(path) = resolve_path(&locale, &format!("{}.ucs", name)) {
-                ucs.merge(UcsTable::parse(&fs::read(path)?)?);
+                ucs.merge(read_ucs(&path)?);
             }
         }
         DisplayNames::new(mount, &fields, ucs)

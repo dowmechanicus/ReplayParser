@@ -44,17 +44,30 @@ impl FieldNames {
         if n > bytes.len() / 4 {
             return Err(invalid(format!("field name count {} too large", n)));
         }
+        // Offsets may overlap, so resolve each one to its terminator by binary search over the
+        // NUL positions (linear memory and O(n log n) time) and bound the total copied bytes.
+        let nuls: Vec<usize> = bytes
+            .iter()
+            .enumerate()
+            .filter(|(_, &b)| b == 0)
+            .map(|(i, _)| i)
+            .collect();
         let mut names = Vec::with_capacity(n);
+        let mut total = 0usize;
         for i in 0..n {
-            let start = 4 + u32_at(bytes, 4 + 4 * i)? as usize;
-            let rest = bytes
-                .get(start..)
+            let start = 4usize
+                .checked_add(u32_at(bytes, 4 + 4 * i)? as usize)
+                .filter(|&s| s <= bytes.len())
                 .ok_or_else(|| invalid(format!("field name {} out of bounds", i)))?;
-            let end = rest
-                .iter()
-                .position(|&b| b == 0)
+            let at = nuls.partition_point(|&p| p < start);
+            let end = *nuls
+                .get(at)
                 .ok_or_else(|| invalid(format!("field name {} not terminated", i)))?;
-            names.push(String::from_utf8_lossy(&rest[..end]).into_owned());
+            total += end - start;
+            if total > bytes.len() {
+                return Err(invalid("field names overlap".to_string()));
+            }
+            names.push(String::from_utf8_lossy(&bytes[start..end]).into_owned());
         }
         Ok(FieldNames { names })
     }
@@ -267,6 +280,20 @@ mod tests {
     use super::*;
     use std::env;
     use std::path::PathBuf;
+
+    #[test]
+    fn field_names_reject_overlapping_offsets() {
+        // 20000 offsets all pointing at one 40000 byte name.
+        let n = 20_000usize;
+        let mut b = (n as u32).to_le_bytes().to_vec();
+        for _ in 0..n {
+            b.extend_from_slice(&(4 * n as u32).to_le_bytes());
+        }
+        b.resize(b.len() + 40_000, b'a');
+        b.push(0);
+        let err = FieldNames::parse(&b).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidData);
+    }
 
     /// Root → entry0 (table key 10 → t1); t1 = [entry1 int key 20 = 0, entry2 table key 11 → t2];
     /// t2 = [entry3 str key 30, entry4 int key 61 = 9040588, entry5 int key 61 = 7 (duplicate)].
