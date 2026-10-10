@@ -4,7 +4,11 @@ This duplicate table is retained for provenance. Its former fixed-offset
 columns and gameplay names are hypotheses from a small sample, not confirmed
 wire fields or a cross-version ID map. The corrected variable command layout
 and row-by-row evidence audit are in
-[`../../../docs/action-table-audit.md`](../../../docs/action-table-audit.md).
+[`../../../docs/action-table-audit.md`](../../../docs/action-table-audit.md);
+the container format, ID namespaces, and typed custom layouts are in
+[`../../../docs/replay-format.md`](../../../docs/replay-format.md) and
+[`../../../docs/command-codec.md`](../../../docs/command-codec.md). Use the
+structured `ReplayInfo.commands` output rather than the legacy filtered view.
 
 # Current wire summary
 

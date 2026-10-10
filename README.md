@@ -6,7 +6,10 @@ little-endian `u16` length and a variable body. The old named examples remain
 below as historical observations; their labels are hypotheses unless the audit
 explicitly marks the underlying fact as proven. See
 [`docs/action-table-audit.md`](docs/action-table-audit.md) for the row-by-row
-disposition and static evidence.
+disposition and static evidence,
+[`docs/replay-format.md`](docs/replay-format.md) for the container format and
+the blueprint/purchase/runtime ID namespaces, and `tools/replay_inspect.py` to
+validate replay boundaries before assigning gameplay meanings.
 
 ## Current wire layout
 
