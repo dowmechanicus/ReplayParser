@@ -516,11 +516,16 @@ mod tests {
         assert_eq!(actions[0].data, purchase);
         assert_eq!(actions[1].data, retreat);
         assert_eq!(actions[2].data, purchase);
-        assert_eq!(actions[0].command.as_ref().unwrap().opcode, 3);
+        assert_eq!(
+            actions[0].command.as_ref().unwrap().opcode,
+            crate::actions::Opcode::CMD_BuildSquad(3)
+        );
         assert_eq!(actions[1].command.as_ref().unwrap().custom.tag, 0xff);
         let json = serde_json::to_value(&actions[0]).unwrap();
         assert_eq!(json["data"], serde_json::json!(purchase));
         assert_eq!(json["command"]["sender_slot"], 1);
+        assert_eq!(json["command"]["opcode"], 3);
+        assert_eq!(json["command"]["opcode_name"], "CMD_BuildSquad");
     }
 
     #[test]
@@ -546,7 +551,13 @@ mod tests {
         let (actions, _) = parse_action(&mut Cursor::new(payload)).unwrap();
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].data, body);
-        assert_eq!(actions[0].command.as_ref().unwrap().opcode, 250);
+        assert_eq!(
+            actions[0].command.as_ref().unwrap().opcode,
+            crate::actions::Opcode::Unknown(250)
+        );
+        let json = serde_json::to_value(&actions[0]).unwrap();
+        assert_eq!(json["command"]["opcode"], 250);
+        assert!(json["command"]["opcode_name"].is_null());
     }
 
     #[test]

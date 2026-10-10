@@ -38,14 +38,83 @@ pub struct CustomPayload {
     pub data: Vec<u8>,
 }
 
+/// Declares [`Opcode`]. Each variant is named after the engine's
+/// `CMD_*`/`SCMD_*`/`PCMD_*` name and holds the wire byte. Bytes outside the
+/// list land in `Unknown` so they survive parsing.
+macro_rules! opcodes {
+    ($($name:ident = $value:literal,)*) => {
+        #[allow(non_camel_case_types)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Opcode {
+            $($name(u8),)*
+            Unknown(u8),
+        }
+
+        impl Opcode {
+            pub fn new(value: u8) -> Self {
+                match value {
+                    $($value => Opcode::$name($value),)*
+                    other => Opcode::Unknown(other),
+                }
+            }
+
+            pub fn value(self) -> u8 {
+                match self {
+                    $(Opcode::$name(value) => value,)*
+                    Opcode::Unknown(value) => value,
+                }
+            }
+
+            /// Engine name for a confirmed opcode; `None` for unknown bytes.
+            pub fn name(self) -> Option<&'static str> {
+                match self {
+                    $(Opcode::$name(_) => Some(stringify!($name)),)*
+                    Opcode::Unknown(_) => None,
+                }
+            }
+        }
+    };
+}
+
+opcodes! {
+    CMD_Stop = 1,
+    CMD_Destroy = 2,
+    CMD_BuildSquad = 3,
+    CMD_CancelProduction = 5,
+    CMD_Attack = 9,
+    CMD_RallyPoint = 11,
+    CMD_Ability = 13,
+    CMD_Upgrade = 15,
+    CMD_UnloadSquads = 23,
+    SCMD_Stop = 43,
+    SCMD_Move = 44,
+    SCMD_Capture = 47,
+    SCMD_Attack = 48,
+    SCMD_ReinforceUnit = 49,
+    SCMD_Upgrade = 50,
+    SCMD_CancelProduction = 51,
+    SCMD_AttackMove = 52,
+    SCMD_Ability = 53,
+    SCMD_Load = 56,
+    SCMD_UnloadSquads = 58,
+    SCMD_Retreat = 61,
+    SCMD_Melee = 70,
+    SCMD_SetWeaponStance = 71,
+    PCMD_ConstructStructure = 78,
+    PCMD_Ability = 85,
+    PCMD_ConstructFence = 89,
+    PCMD_Ping = 94,
+    PCMD_ResurrectHero = 96,
+}
+
 /// Decoded fields common to every action command, including unknown opcodes.
 ///
 /// The parser only assigns semantics to framing and fields supported by the
 /// inspected serializer. `raw_context` and `custom.data` remain available when
 /// the game-specific meaning is unknown.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct Command {
-    pub opcode: u8,
+    pub opcode: Opcode,
     pub sender_flags: u8,
     pub sender_slot: u8,
     pub process_type: u8,
@@ -61,7 +130,7 @@ impl Command {
             return Err(invalid("command body is too short"));
         }
 
-        let opcode = data[0];
+        let opcode = Opcode::new(data[0]);
         let sender_flags = data[1];
         let sender_slot = sender_flags & 0x7f;
         let process_type = sender_flags >> 7;
@@ -108,6 +177,26 @@ impl Command {
             receivers,
             custom,
         })
+    }
+}
+
+/// Keeps `opcode` as its numeric wire value for existing consumers and adds
+/// `opcode_name` (`null` for unknown bytes).
+impl Serialize for Command {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Command", 8)?;
+        state.serialize_field("opcode", &self.opcode.value())?;
+        state.serialize_field("opcode_name", &self.opcode.name())?;
+        state.serialize_field("sender_flags", &self.sender_flags)?;
+        state.serialize_field("sender_slot", &self.sender_slot)?;
+        state.serialize_field("process_type", &self.process_type)?;
+        state.serialize_field("raw_context", &self.raw_context)?;
+        state.serialize_field("receivers", &self.receivers)?;
+        state.serialize_field("custom", &self.custom)?;
+        state.end()
     }
 }
 
