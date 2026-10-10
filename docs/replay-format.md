@@ -28,7 +28,7 @@ follows. Integers in this table are little endian.
 | Offset | Size | Meaning | Evidence |
 | ---: | ---: | --- | --- |
 | `0x00` | 4 | replay format/version (`0x2850` in the analysed build) | writer at `42b1..42b259` |
-| `0x04` | 4 | data/mod checksum (`0x7a0a30` in the analysed build) | writer and validator |
+| `0x04` | 4 | data/mod checksum (value varies with the data set; e.g. `0xf7c1d0fc` in the Elite mod replay `temp.rec`). `0x7a0a30` is the code address of the writer's checksum routine, not a value | writer and validator |
 | `0x08` | 4 | reserved, observed zero | writer |
 | `0x0c` | 8 | ASCII `DOW2_REC` | writer |
 | `0x14` | 64 | 32 UTF-16LE code units containing the date/time | writer |
