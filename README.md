@@ -1,36 +1,90 @@
-# Replay format status
+# Replay action format
 
-The old action tables below are historical observations from a small set of
-replays, retained for provenance only. They used the wrong fixed-offset
-framing for command lengths and contain unverified field and ID
-interpretations; they are not a cross-version ID catalogue. The current wire
-format and the distinction between blueprint IDs, purchase values, and runtime
-receiver IDs are documented in [docs/replay-format.md](docs/replay-format.md).
-Use `tools/replay_inspect.py` to validate replay boundaries before assigning
-gameplay meanings to opcode or custom payload values.
+The action tables that previously started this file described a fixed 19-byte
+record. That description was wrong: replay commands have an inclusive
+little-endian `u16` length and a variable body. The old named examples remain
+below as historical observations; their labels are hypotheses unless the audit
+explicitly marks the underlying fact as proven. See
+[`docs/action-table-audit.md`](docs/action-table-audit.md) for the row-by-row
+disposition and static evidence,
+[`docs/replay-format.md`](docs/replay-format.md) for the container format and
+the blueprint/purchase/runtime ID namespaces, and `tools/replay_inspect.py` to
+validate replay boundaries before assigning gameplay meanings.
 
-# Historical action observations
+## Current wire layout
 
-# The action data block has the following format:
+Every command is framed inside a bundle command stream as:
 
-Nr.  | TYPE  | LENGTH  | Description
------| ----- | ------- | -----------
-1    | BYTE  | 1       | Unknown. Is always 0 though.
-2 |  BYTE|  1|    Action Type (confirmed)
-3|  BYTE|  1| Not sure. It seems half an id and half an action identifier. By building generators the higher 4 bit are 0x8 lower 4 bit: 1 means this action is executed by player with ID 1, does not always correspond to the order of players in the header. I think this might be the position of the player base. So with fixed positioning this corresponds to the player ID, that's why that only works in fixed games.<br>Observation on lower bits: Seem to indicate player base location. <br>Observation on higher bits: Values that have been observed so far [u8]: 0, 1, 2, 3, 4, 5, 128, 129, 130, 131, 132, 133
-4|  BYTE|  1|    Player ID (confirmed)
-5|  BYTE|  1|    Unknown<br>Values that have been observed so far [u8]: 3
-6-7|  BYTE|  2|  A counter for the actions performed by this player. (confirmed)<br> Starts at 0. This means there is a limit of 65536.<br> Best read as u16 LittleEndian
-8|  BYTE|  1| 0x10 = build units at HQ, tier upgrade (T2, T3), building upgrade (e.g. Turret -> Missile Turret)<br> 0x20 = unit upgrades, movement<br>0x42 = was spotted with action code 56<br>0x44 = was spotted with action code 56<br>0x0  = seems related to power nodes and placeable entities (Turret, Mines)<br>(seems like any action performed by HQ like building or setting rally point is 10 while every action performed by a unit is 20<br>Values that have been observed so far [u8] (hex): 0 (0x0), 16 (0x10), 32 (0x20), 66 (0x42), 68 (0x44)
-9|  BYTE|  1|    Unknown<br> Values that have been observed so far [u8]: 0, 1, 93
-10|  BYTE|  1|   Always changes together with 0x10 or 0x20 two bytes before. This is most likely the player location/building/unit id<br><br> Values that have been observed so far [u8] in 1v1: 3, 74, 88, 120, 169, 179, 195<br> Values that have been observed so far [u8] in 2v2: 195, 202<br> Values that have been observed so far [u8] in 3v3: 0, 3, 195<br>Values that have been observed so far [u8] additionally: 122
-11| BYTE|  1| Most likely the unit identifier. But how/where is it assigned?
-12-13| BYTE| 2 | Seems to provide more context for the action (see general observations)
-14| BYTE|  1| Identifier for e.g. wargear, unit, global ability.<br><br>When building a power node this has been observed to be 107<br> When building a generator this has been observed to be 98<br>When using global abilities this has been observed to be 115, 123, 125, 124, 119
-15-19| DWORD| 4| **STILL NOT CONFIRMED**<br>Identifier for the item (unit, upgrade, wargear)<br>See the item codes file for these values<br><br>Identifier for the canceled unit, upgrade, wargear<br>These are numbered in the order they are queued.<br>Units and Base Tiers share the same numbering.<br> Wargear is on a different ordering.<br> Upgrades have a different ordering for every unit. These actions are numbered: upgrades (0x30) and unknown (0x2E)
+```text
+u16 command_size                 # little endian, includes these 2 bytes
+u8  opcode                       # body offset 0
+u8  sender_and_process_flags     # body offset 1
+u8[4] reserved_command_context   # body offsets 2..5
+... receiver field ...
+u8  custom_type                  # 0xff means no custom payload
+... custom length and payload ...
+```
 
+The sender slot is `flags & 0x7f`; the high bit is the serialized command
+process flag. The four context bytes are copied onto the wire verbatim. Native
+`CommandIssueProxy` construction fills the first `u16` through a virtual
+identity getter and the second through a per-proxy 16-bit counter before
+calling `WorldCommand::SetReserved`; the getter's exact semantic name remains
+unresolved. The six-file audit corpus has
+`u16_le(context[0..2]) == 1000 + sender` for all 30,373 commands. The next
+little-endian `u16` usually increments from zero per sender, but `recs/1.rec`
+has one stream reset from 1037 to zero; no counter limit or wrap rule is
+proven. A
+single receiver is a big-endian packed word
+`(type << 28) | instance_id`. A receiver list has a tagged big-endian count
+(`0x40..`, `0x8000..`, or `0xc0000000..`) followed by little-endian packed
+receiver words. Observed receiver types are player `0`, entity `1`, and squad
+`2`. These runtime instance IDs are not blueprint IDs.
+
+Custom lengths below `0x80` occupy one byte; larger lengths use
+`((first & 0x7f) << 8) | second`. Type `0xff` means no custom payload. Every
+custom tag observed in the corpus now has a recovered layout built from three
+primitives — `u32`, 12-byte position, and a packed Target
+(`u8 type` + nothing/`u16` squad/`u32` entity/12-byte position, wire sizes
+1/3/5/13) — plus a packed builder entity `u32`/squad `u16` pair in the
+construction forms. See the custom-tag codec table in the audit. Tags outside
+the recovered set stay opaque.
+
+For the analysed build the opcode byte is also named: the executable preserves
+the command enum in its SCAR constant registration, in three name-pointer
+arrays (`CMD_*` base 0, `SCMD_*` base 41, `PCMD_*` base 78), and in the
+literal opcodes passed to the `WorldDoCommand*` issuers — three independent
+sources that agree everywhere they overlap. The type-5/length-4 `u32` values
+resolve per opcode through `PropertyBagGroupManager::GetGroup(type, id)`:
+squad-blueprint (SBP) indices for opcode 3, `Upgrade\` indices for 15 and 50,
+entity-blueprint (EBP) indices for 49, and `Ability\` indices for the tag-25
+ability forms of 13/53/85; opcode 78/89/90's 35-byte form leads with the EBP
+index of the structure. Cancellation values (opcodes 5 and 51) are 1-based
+per-producer enqueue ordinals — runtime tokens, not blueprints. Blueprint
+indices are per-type catalogue positions of the build that recorded the
+replay: RBF builds assign them by case-insensitive (`_stricmp`) path order,
+RB2 builds by entry order, so raw values are incomparable across versions
+unless keyed by the header checksum. See the
+[audit](docs/action-table-audit.md) for the enum sources, receive-side
+dispatch, codec layouts, and all call-site addresses.
+
+The parser's complete structural view is `ReplayInfo.commands`. The older
+`ReplayInfo.actions` view is filtered for compatibility and omits some opcode
+values. For a JSON dump, run `cargo run -p parser -- path/to/replay.rec` and
+inspect `.commands`.
+
+The old fixed rows are not a cross-version ID catalogue. A receiver instance,
+a purchase or queue value, and an attribute blueprint/group index belong to
+different namespaces. A replay records numeric references plus a data checksum;
+it does not embed the complete mod attribute archive. Matching a number to a
+unit name across game or mod versions therefore requires the matching data and
+reconstruction of that session's runtime group creation order.
+
+## Historical action observations
 
 # General observations:
+
+The bullets in this historical section record patterns reported from a small sample. They are not confirmed wire-field meanings. In particular, pairs such as `(25, 5)` are observed custom type/length shapes; they do not globally identify an ability category, target kind, or unit ID.
 
 - Abilities that can be toggled are identical apart from the action counter. As far as the game is concerned you have
   used the same ability twice.
@@ -62,40 +116,36 @@ Nr.  | TYPE  | LENGTH  | Description
 - Canceling a unit purchase functions like clearing an item from an array without removing the item itself ("nulling" instead of delete). There exists an internal counter that keeps track of each distinct purchase
   even if the same unit is purchases and immediately cancelled. That will still cause the counter to increment.
 
-# Action Types
-- 1 => Ability on placeable object
-- 3 => Build unit
-- 5 => Cancel unit or wargear
-- 9 => Attack from placeable object (e.g. turret)
-- 11 => Set rally point
-- 15 => Upgrade building
-- 23 => Exit building
-- 43 => Stop move
-- 44 => Move
-- 47 => Capture point
-- 48 => Attack
-- 49 => Reinforce unit
-- 50 => Purchase wargear
-- 51 => Cancel wargear purchase
-- 52 => Attack move
-- 53 => Ability on unit
-- 56 => Enter building or vehicle
-- 58 => Exit vehicle
-- 61 => Retreat
-- 70 => Force melee
-- 71 => Toggle stance
-- 78 => Place building
-- 85 => Global ability
-- 89 => Unknown
-- 94 => Unknown // source 0x0
-- 96 => Unknown // source 0x0
-- 98 => Unknown // source 0x0
+# Opcode observations
+
+The original opcode names are retained in the named examples below as
+historical hypotheses. The six-file corpus observes 27 opcode bytes; all of
+them now have engine names recovered from the analysed build (build-scoped,
+not a cross-version contract). See
+[`docs/action-table-audit.md`](docs/action-table-audit.md) for every old row,
+its observed custom shapes, the enum evidence, and its disposition.
+
+| opcode | engine name | opcode | engine name | opcode | engine name |
+| ---: | --- | ---: | --- | ---: | --- |
+| 2 | `CMD_Destroy` | 44 | `SCMD_Move` | 58 | `SCMD_UnloadSquads` |
+| 3 | `CMD_BuildSquad` | 47 | `SCMD_Capture` | 61 | `SCMD_Retreat` |
+| 5 | `CMD_CancelProduction` | 48 | `SCMD_Attack` | 70 | `SCMD_Melee` |
+| 9 | `CMD_Attack` | 49 | `SCMD_ReinforceUnit` | 71 | `SCMD_SetWeaponStance` |
+| 11 | `CMD_RallyPoint` | 50 | `SCMD_Upgrade` | 78 | `PCMD_ConstructStructure` |
+| 13 | `CMD_Ability` | 51 | `SCMD_CancelProduction` | 85 | `PCMD_Ability` |
+| 15 | `CMD_Upgrade` | 52 | `SCMD_AttackMove` | 89 | `PCMD_ConstructFence` |
+| 23 | `CMD_UnloadSquads` | 53 | `SCMD_Ability` | 94 | `PCMD_Ping` |
+| 43 | `SCMD_Stop` | 56 | `SCMD_Load` | 96 | `PCMD_ResurrectHero` |
 
 # Global Abilities
+
+The tables below are preserved raw/historical examples. Their old column headings describe the former fixed-offset interpretation and are not the current wire layout. Some rows contain a complete variable command tail and some are incomplete; the numeric names are not a cross-version ID map. Use the corrected layout and audit above when interpreting these bytes.
+
+
 ## Space Marines (Techmarine, Apothecary, Force Commander)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Blessing of the Omnissiah | 0| 85| 1| 233| 3| 0| 0| 0| 0| 3| 233| 25| 5| 115| 3| 0| 0
 Drop Pod | 0| 85| 1| 233| 3| 1| 0| 0| 0| 3| 233| 26| 19| 123| 3| 0| 0| 1| 0| 2| 74| 75| 68| 193| 72|5| 210| 66| 126| 168| 37
 Venerable Dreadnought | 0| 85| 1| 233| 3| 4| 0| 0| 0| 3| 233| 26| 19| 125| 3| 0| 0| 1| 0| 2| 90| 174| 28| 65| 51| 243| 209| 66| 100| 222| 42
@@ -114,8 +164,8 @@ Orbital Bombardement | 0|85|0|232|3|23|0|0|0|3|232|28|59|119|3|0|0|1|0|2|182|98|
 
 ## Eldar (Warlock, WSE, Farseer)
 
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Webway Gate | 0|78|1|233|3|2|0|0|0|3|233|15|35|198|1|0|0|54|10|136|193|86|236|209|66|211|70|37|67|54|10|136|193|86|236|209|66|211|70|38|67|0|0|0|0|0|0
 Swift Movement | 0|85|1|233|3|3|0|0|0|3|233|25|5|197|1|0|0
 Distort Field | 0|85|1|233|3|4|0|0|0|3|233|26|9|199|1|0|0|1|0|4|86
@@ -134,8 +184,8 @@ Eldritch Storm | 0|85|0|232|3|6|0|0|0|3|232|26|19|201|1|0|0|1|0|2|248|246|73|193
 
 # Unit Abilities
 ## Space Marines
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tacs activate Kraken Rounds | 0|53|1|233|3|6|0|32|0|195|85|25|5|164|3|0|0
 Scouts cloaking | 0|53|1|233|3|7|0|32|0|195|83|25|5|143|3|0|0
 Scouts uncloaking | 0|53|1|233|3|8|0|32|0|195|83|25|5|143|3|0|0
@@ -146,15 +196,15 @@ FC toggle on halo | 0|53|1|233|3|12|0|32|0|195|82|25|5|109|3|0|0
 FC toggle off halo | 0|53|1|233|3|13|0|32|0|195|82|25|5|109|3|0|0
 
 ## Eldar
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Farseer Fleet of Foot | 0|53|1|233|3|8|0|32|0|195|86|25|5|173|1|0|0
 Farseer Guide | 0|53|1|233|3|9|0|32|0|195|86|26|9|182|1|0|0|1|0|4|87
 
 # Unit Purchases
 ## Eldar
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Dire Avengers | 0|3|1|233|3|0|0|16|0|120|180|5|4|141|0|0
 Howling Banshees | 0|3|1|233|3|1|0|16|0|120|180|5|4|137|0|0
 Rangers | 0|3|1|233|3|2|0|16|0|120|180|5|4|146|0|0
@@ -171,8 +221,8 @@ Avatar | 0|3|0|232|3|6|0|16|0|120|173|5|4|145|0|0
 Seer Council | 0|3|0|232|3|7|0|16|0|120|173|5|4|147|0|0
 
 ## Space Marines
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Scouts | 0|3|0|232|3|0|0|16|0|120|173|5|4|219|0|0
 Tactical Marines | 0|3|0|232|3|1|0|16|0|120|173|5|4|221|0|0
 Devastators | 0|3|0|232|3|2|0|16|0|120|173|5|4|216|0|0
@@ -186,8 +236,8 @@ Predator Tank | 0|3|0|232|3|19|0|16|0|120|173|5|4|227|0|0
 Landraider Redeemer | 0|3|0|232|3|20|0|16|0|120|173|5|4|226|0|0
 
 ## Orks
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Sluggas | 0|3|1|233|3|0|0|16|0|120|185|5|4|245|0|0
 Shoota Boys | 0|3|1|233|3|1|0|16|0|120|185|5|4|244|0|0
 Lootas | 0|3|1|233|3|2|0|16|0|120|185|5|4|241|0|0
@@ -205,8 +255,8 @@ Battlewaggon | 0|3|1|233|3|28|0|16|0|120|185|5|4|251|0|0
 Flash Gitz | 0|3|1|233|3|29|0|16|0|120|185|5|4|239|0|0
 
 ## Chaos Space Marines
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Heretics | 0|3|1|233|3|0|0|16|0|120|183|5|4|110|0|0
 Chaos Space Marines | 0|3|1|233|3|1|0|16|0|120|183|5|4|121|0|0
 Havocs | 0|3|1|233|3|2|0|16|0|120|183|5|4|113|0|0
@@ -221,8 +271,8 @@ Great Unclean One | 0|3|1|233|3|21|0|16|0|120|183|5|4|112|0|0
 Landraider Phobos | 0|3|1|233|3|22|0|16|0|120|183|5|4|124|0|0
 
 ## Imperial Guard
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Guardsmen | 0|3|0|232|3|0|0|16|0|120|173|5|4|192|0|0
 Sentinel | 0|3|0|232|3|1|0|16|0|120|173|5|4|204|0|0
 Heavy Weapons Squad | 0|3|0|232|3|2|0|16|0|120|173|5|4|193|0|0
@@ -237,8 +287,8 @@ Baneblade | 0|3|0|232|3|21|0|16|0|120|173|5|4|199|0|0
 Kasrkin Squad | 0|3|0|232|3|22|0|16|0|120|173|5|4|194|0|0
 
 ## Tyranids
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Hormagaunts | 0|3|0|232|3|0|0|16|0|120|173|5|4|5|1|0
 Termagants | 0|3|0|232|3|1|0|16|0|120|173|5|4|11|1|0
 Warrior Brood | 0|3|0|232|3|2|0|16|0|120|173|5|4|13|1|0
@@ -254,8 +304,8 @@ Swarmlord | 0|3|0|232|3|22|0|16|0|120|173|5|4|10|1|0
 Neurothrope | 0|3|0|232|3|26|0|16|0|120|173|5|4|16|1|0
 
 ## Ordo Malleus
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Inquisitorial Storm Troopers | 0|3|1|233|3|0|0|16|0|120|182|5|4|177|0|0
 Strike Squad | 0|3|1|233|3|1|0|16|0|120|182|5|4|178|0|0
 Inquistorial Operatives | 0|3|1|233|3|2|0|16|0|120|182|5|4|173|0|0
@@ -274,8 +324,8 @@ Vortimer Razorback | 0|3|1|233|3|24|0|16|0|120|182|5|4|184|0|0
 # Wargear Purchases
 ## Eldar
 ### Farseer
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Doombringer |0|50|1|233|3|2|0|32|0|195|86|5|4|192|0|0
 Fortune Armor | 0|50|1|233|3|3|0|32|0|195|86|5|4|184|0|0
 Spirit Stones | 0|50|1|233|3|4|0|32|0|195|86|5|4|175|0|0
@@ -287,8 +337,8 @@ Asuryan Armor | 0|50|1|233|3|11|0|32|0|195|86|5|4|183|0|0
 Runes of Reaping | 0|50|1|233|3|12|0|32|0|195|86|5|4|174|0|0
 
 ### Warpspider Exarch
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Heavy Gauge Death Spinner | 0|50|1|233|3|2|0|32|0|195|86|5|4|195|0|0
 Improved Warp Generator | 0|50|1|233|3|4|0|32|0|195|86|5|4|190|0|0
 Improved Targeters | 0|50|1|233|3|6|0|32|0|195|86|5|4|181|0|0
@@ -300,8 +350,8 @@ Phase Armor | 0|50|1|233|3|16|0|32|0|195|86|5|4|191|0|0
 Anti-Grav Grenade | 0|50|1|233|3|18|0|32|0|195|86|5|4|180|0|0
 
 ### Warlock
-Name | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Name | Historical raw sample bytes and fields (variable length)
+--- | ---
 Immolator | 0|50|0|232|3|2|0|32|0|195|84|5|4|198|0|0
 Champion's Robe | 0|50|0|232|3|3|0|32|0|195|84|5|4|186|0|0
 Channeling Runes | 0|50|0|232|3|4|0|32|0|195|84|5|4|176|0|0
@@ -317,8 +367,8 @@ Falochu's Wing | 0|50|0|232|3|16|0|32|0|195|84|5|4|177|0|0
 
 ## Nodes + Generators
 ### Nodes
-1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+1 | Historical raw sample bytes and fields (variable length)
+--- | ---
 0|78|0|232|3|7|0|0|0|3|232|15|35|111|2|0|0|38|200|225,66,0,0,72,66,37,216,220,66,38,200,227,66,0,0,72,66,37,216,220,66,0,25,41,0,0,0
 0|78|3|235|3|27|0|0|0|3|235|15|35|111|2|0|0|0|0|198,194,0,0,72,66,0,0,210,66,0,0,196,194,0,0,72,66,0,0,210,66,0,15,41,0,0,0
 0|78|2|234|3|22|0|0|0|3|234|15|35|111|2|0|0|0|0|158,66,0,0,72,66,0,0,148,194,0,0,160,66,0,0,72,66,0,0,148,194,0,146,43,0,0,0
@@ -327,61 +377,61 @@ Falochu's Wing | 0|50|0|232|3|16|0|32|0|195|84|5|4|177|0|0
 0|78|4|236|3|216|0|0|0|3|236|15|35|36|2|0|0|0|0|128,63,0,0,72,66,0,0,128,191,0,0,0,64,0,0,72,66,0,0,128,191,0,199,52,0,0,0
 
 ### Generators
-1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+1 | Historical raw sample bytes and fields (variable length)
+--- | ---
 0|78|128|232|3|41|0|0|0|3|232|15|35|102|2|0|0|0|0|225,66,0,0,72,66,0,0,205,66,0,0,227,66,0,0,72,66,0,0,205,66,0,13,55,0,0,0
 0|78|128|232|3|42|0|0|0|3|232|15|35|102|2|0|0|0|0|225,66,0,0,72,66,0,0,205,66,0,0,227,66,0,0,72,66,0,0,205,66,0,13,55,0,0,0
 0|78|132|236|3|0|1|0|0|3|236|15|35|31|2|0|0|0|0|208,192,0,0,72,66,0,0,0,191,0,0,176,192,0,0,72,66,0,0,0,191,0,66,61,0,0,0
 
 ## Eldar
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|124|0|0
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|125|0|0
 
 
 ## Ordo Malleus
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|0|232|3|1|0|16|0|120|173|5|4|190|1|0
 
 
 ## Chaos Space Marines
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|185|5|4|40|0|0 
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|185|5|4|41|0|0 
 
 
 ## Imperial Guard
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|1|233|3|0|0|16|0|120|183|5|4|52|1|0
 Tier 3 | 0|15|1|233|3|1|0|16|0|120|183|5|4|54|1|0
 
 
 ## Orks
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|20|2|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|21|2|0
 
 
 ## Space Marines
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|190|1|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|191|1|0
 
 
 ## Tyranids
 
-Purchase | 1 | Action Type| Player location ID | Player ID |5|Action Counter I|Action Counter II|Action Source (u8)|9|10|Unit/Player ID|Action Context I|Action Context II|Item ID|15|16|17|18|19|20
--|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-|-
+Purchase | Historical raw sample bytes and fields (variable length)
+--- | ---
 Tier 2 | 0|15|0|232|3|0|0|16|0|120|173|5|4|82|2|0
 Tier 3 | 0|15|0|232|3|1|0|16|0|120|173|5|4|83|2|0
