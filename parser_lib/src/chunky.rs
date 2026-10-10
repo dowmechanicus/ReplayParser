@@ -8,6 +8,7 @@ pub struct Game {
     pub resources: String,
     pub locations: String,
     pub victory_points: u32,
+    pub random_seed: u32,
 }
 #[derive(Serialize)]
 pub struct Data {
@@ -41,6 +42,12 @@ pub struct Player {
     pub skin_path: String,
     pub skin_name: String,
     pub id: u8,
+    /// Position of this player's DATAINFO among all lobby blocks, empty ones included.
+    pub lobby_block: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<u32>,
 }
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -130,7 +137,9 @@ fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let mut resources = String::new();
     let mut locations = String::new();
     let mut mode = "Annihilation".to_owned();
-    cursor.seek(SeekFrom::Current(12))?;
+    // Word 3 is the game's random seed.
+    cursor.seek(SeekFrom::Current(8))?;
+    let random_seed = cursor.read_u32::<LittleEndian>()?;
     let nparams = cursor.read_u32::<LittleEndian>()?;
     for _ in 0..nparams {
         let val = cursor.read_u32::<LittleEndian>()?;
@@ -165,6 +174,7 @@ fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         resources,
         locations,
         victory_points: vpc,
+        random_seed,
     }))
 }
 
@@ -225,6 +235,9 @@ fn parse_info(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         skin_path,
         skin_name,
         id,
+        lobby_block: 0,
+        slot: None,
+        player_id: None,
     }))
 }
 
@@ -251,4 +264,33 @@ pub fn read_vstring_utf16(cursor: &mut Cursor<Vec<u8>>) -> String {
     }
 
     String::from_utf16(&buf).unwrap_or("".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_random_seed_from_database_chunk() {
+        let mut bytes = Vec::new();
+        for word in [1u32, 2, 0x5622_3305] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // nparams
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // COLS value
+        bytes.extend_from_slice(b"COLS");
+        bytes.push(0);
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // empty name
+        bytes.extend_from_slice(&[0; 4]);
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // nconds
+        bytes.extend_from_slice(&[0; 12]);
+
+        match parse_base(&mut Cursor::new(bytes)).unwrap() {
+            Chunk::Game(game) => {
+                assert_eq!(game.random_seed, 0x5622_3305);
+                assert_eq!(game.locations, "Random");
+            }
+            _ => panic!("expected a game chunk"),
+        }
+    }
 }
