@@ -39,26 +39,31 @@ receiver words. Observed receiver types are player `0`, entity `1`, and squad
 `2`. These runtime instance IDs are not blueprint IDs.
 
 Custom lengths below `0x80` occupy one byte; larger lengths use
-`((first & 0x7f) << 8) | second`. Type `0xff` means no custom payload. Generic
-type-5 decoding proves only a four-byte unsigned data path; custom values are
-opcode- and version-dependent. Unknown tags and payloads stay opaque.
+`((first & 0x7f) << 8) | second`. Type `0xff` means no custom payload. Every
+custom tag observed in the corpus now has a recovered layout built from three
+primitives — `u32`, 12-byte position, and a packed Target
+(`u8 type` + nothing/`u16` squad/`u32` entity/12-byte position, wire sizes
+1/3/5/13) — plus a packed builder entity `u32`/squad `u16` pair in the
+construction forms. See the custom-tag codec table in the audit. Tags outside
+the recovered set stay opaque.
 
-The native construction audit confirms additional build-local context. The
-type-5/length-4 forms used by opcodes 3, 5, 15, 49, 50, and 51 carry a full
-little-endian `u32`: the observed Tyranid bytes `05 01 00 00` equal 261, and
-the observed tier bytes `be 01 00 00` equal 446. DOW2 readers branch on tags
-25 and 26 for packed ability/target readers, and opcode 78's type-15/length-35
-form is written by `0x941440 -> 0x812a40` as observed segments of
-`4 + 12 + 12 + 1 + 4 + 2` bytes, with packed entity/squad portions handled by
-generic helpers. The replay samples expose two float triples and a seven-byte
-tail within that form. Native cancellation handlers at `0x437d32` and
-`0x43834c` walk twelve-byte queue entries, resolve stored `u32` keys through
-`0x41ea96`, notify cancellation, destroy commands, and compact the queue; the
-available code does not directly tie opcode 5/51 custom values to those keys.
-These facts establish widths and context in the inspected build; they do not create
-a universal blueprint/name catalogue. See the [semantic and constructor
-audit](docs/action-table-audit.md) for the opcode call sites and evidence
-boundary.
+For the analysed build the opcode byte is also named: the executable preserves
+the command enum in its SCAR constant registration, in three name-pointer
+arrays (`CMD_*` base 0, `SCMD_*` base 41, `PCMD_*` base 78), and in the
+literal opcodes passed to the `WorldDoCommand*` issuers — three independent
+sources that agree everywhere they overlap. The type-5/length-4 `u32` values
+resolve per opcode through `PropertyBagGroupManager::GetGroup(type, id)`:
+squad-blueprint (SBP) indices for opcode 3, `Upgrade\` indices for 15 and 50,
+entity-blueprint (EBP) indices for 49, and `Ability\` indices for the tag-25
+ability forms of 13/53/85; opcode 78/89/90's 35-byte form leads with the EBP
+index of the structure. Cancellation values (opcodes 5 and 51) are 1-based
+per-producer enqueue ordinals — runtime tokens, not blueprints. Blueprint
+indices are per-type catalogue positions of the build that recorded the
+replay: RBF builds assign them by case-insensitive (`_stricmp`) path order,
+RB2 builds by entry order, so raw values are incomparable across versions
+unless keyed by the header checksum. See the
+[audit](docs/action-table-audit.md) for the enum sources, receive-side
+dispatch, codec layouts, and all call-site addresses.
 
 The parser's complete structural view is `ReplayInfo.commands`. The older
 `ReplayInfo.actions` view is filtered for compatibility and omits some opcode
@@ -111,14 +116,23 @@ The bullets in this historical section record patterns reported from a small sam
 # Opcode observations
 
 The original opcode names are retained in the named examples below as
-historical hypotheses. The six-file corpus observes 27 opcode bytes, but the
-analysed generic writer/reader does not contain a complete gameplay dispatch
-enum. See [`docs/action-table-audit.md`](docs/action-table-audit.md) for every
-old row, its observed custom shapes, and its evidence disposition.
+historical hypotheses. The six-file corpus observes 27 opcode bytes; all of
+them now have engine names recovered from the analysed build (build-scoped,
+not a cross-version contract). See
+[`docs/action-table-audit.md`](docs/action-table-audit.md) for every old row,
+its observed custom shapes, the enum evidence, and its disposition.
 
-| Observed opcode bytes |
-| --- |
-| `2, 3, 5, 9, 11, 13, 15, 23, 43, 44, 47, 48, 49, 50, 51, 52, 53, 56, 58, 61, 70, 71, 78, 85, 89, 94, 96` |
+| opcode | engine name | opcode | engine name | opcode | engine name |
+| ---: | --- | ---: | --- | ---: | --- |
+| 2 | `CMD_Destroy` | 44 | `SCMD_Move` | 58 | `SCMD_UnloadSquads` |
+| 3 | `CMD_BuildSquad` | 47 | `SCMD_Capture` | 61 | `SCMD_Retreat` |
+| 5 | `CMD_CancelProduction` | 48 | `SCMD_Attack` | 70 | `SCMD_Melee` |
+| 9 | `CMD_Attack` | 49 | `SCMD_ReinforceUnit` | 71 | `SCMD_SetWeaponStance` |
+| 11 | `CMD_RallyPoint` | 50 | `SCMD_Upgrade` | 78 | `PCMD_ConstructStructure` |
+| 13 | `CMD_Ability` | 51 | `SCMD_CancelProduction` | 85 | `PCMD_Ability` |
+| 15 | `CMD_Upgrade` | 52 | `SCMD_AttackMove` | 89 | `PCMD_ConstructFence` |
+| 23 | `CMD_UnloadSquads` | 53 | `SCMD_Ability` | 94 | `PCMD_Ping` |
+| 43 | `SCMD_Stop` | 56 | `SCMD_Load` | 96 | `PCMD_ResurrectHero` |
 
 # Global Abilities
 
