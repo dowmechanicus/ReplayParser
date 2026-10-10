@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process;
 
 use parser_lib;
-use parser_lib::blueprints::SbpCatalogue;
+use parser_lib::blueprints::BlueprintCatalogues;
 
 fn main() {
     let mut file = None;
@@ -38,7 +38,7 @@ fn main() {
 
     let module_path = Path::new(&module);
     let install_dir = module_path.parent().unwrap_or_else(|| Path::new("."));
-    let catalogue = match SbpCatalogue::from_module(install_dir, module_path) {
+    let catalogue = match BlueprintCatalogues::from_module(install_dir, module_path) {
         Ok(catalogue) => catalogue,
         Err(e) => {
             eprintln!("could not read module {}: {}", module, e);
@@ -47,7 +47,7 @@ fn main() {
     };
     match parser_lib::parse_raw(file) {
         Ok(mut replay) => {
-            parser_lib::resolve_squad_names(&mut replay, &catalogue, &module);
+            parser_lib::resolve_blueprints(&mut replay, &catalogue, &module);
             match parser_lib::to_json(&replay) {
                 Ok(json) => println!("{}", json),
                 Err(e) => println!("error: {}", e),

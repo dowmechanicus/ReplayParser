@@ -32,11 +32,14 @@ pub struct ActionBundle {
     pub commands: Vec<Action>,
 }
 
-/// Module whose SBP catalogue was used to resolve squad names.
+/// Module whose catalogues were used to resolve blueprint names, and their sizes.
 #[derive(Debug, Default, Serialize)]
 pub struct BlueprintSource {
     pub module: String,
+    pub ebp_count: usize,
     pub sbp_count: usize,
+    pub upgrade_count: usize,
+    pub ability_count: usize,
 }
 
 #[derive(Default, Serialize)]

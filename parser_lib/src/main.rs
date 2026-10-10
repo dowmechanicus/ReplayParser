@@ -8,13 +8,20 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate crypto;
 
+#[allow(dead_code)]
+mod blueprints;
 mod chunky;
 mod message;
 #[allow(dead_code)]
 mod metadata;
+#[allow(dead_code)]
+mod module;
 mod parse;
+#[allow(dead_code)]
 mod replay;
 mod seats;
+#[allow(dead_code)]
+mod sga;
 use parse::*;
 mod actions;
 

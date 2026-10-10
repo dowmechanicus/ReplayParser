@@ -18,7 +18,7 @@ mod parse;
 pub mod replay;
 pub mod seats;
 pub mod sga;
-use actions::{Action, Opcode};
+use actions::Action;
 use parse::*;
 use std::collections::BTreeSet;
 
@@ -40,21 +40,52 @@ pub fn to_json(replay: &replay::ReplayInfo) -> serde_json::Result<String> {
     serde_json::to_string_pretty(replay)
 }
 
-/// Fills `squad_blueprint` on every `CMD_BuildSquad` carrying a 4-byte
-/// squad index (custom tag 5). Warnings go to stderr; stdout carries the JSON.
-pub fn resolve_squad_names(
+/// Blueprint namespace referenced by a command's leading `u32`, by (opcode, custom tag, payload
+/// length). Only forms verified against current-build replays are listed. Deliberately left
+/// unresolved: 13 (`CMD_Ability`, unverified), 90 and 4/16/63/64 (docs-only), 5/51 (queue
+/// ordinals), 71 (stance), tag-1 forms of 53/85, 94 and 96 (not blueprints).
+pub fn blueprint_kind_for(
+    opcode: u8,
+    tag: u8,
+    length: Option<u16>,
+) -> Option<blueprints::BlueprintKind> {
+    use blueprints::BlueprintKind::*;
+    let length = length?;
+    match (opcode, tag) {
+        (3, 5) if length == 4 => Some(Sbp),
+        (15, 5) | (50, 5) if length == 4 => Some(Upgrade),
+        (49, 5) if length == 4 => Some(Ebp),
+        (78, 15) | (89, 16) if length == 35 => Some(Ebp),
+        (53, 25..=29) | (85, 25..=29) if length >= 5 => Some(Ability),
+        _ => None,
+    }
+}
+
+/// Fills `Command.blueprint` on every command whose (opcode, tag, length) is a verified
+/// blueprint form. Indices are build-specific: a replay from a different build than the
+/// catalogues yields wrong names without warning. Always sets `replay.blueprints`.
+pub fn resolve_blueprints(
     replay: &mut replay::ReplayInfo,
-    catalogue: &blueprints::SbpCatalogue,
+    catalogues: &blueprints::BlueprintCatalogues,
     module: &str,
 ) {
+    let counts = catalogues.counts();
+    replay.blueprints = Some(replay::BlueprintSource {
+        module: module.to_string(),
+        ebp_count: counts.ebp,
+        sbp_count: counts.sbp,
+        upgrade_count: counts.upgrade,
+        ability_count: counts.ability,
+    });
     let mut warned = BTreeSet::new();
     let mut resolve = |actions: &mut Vec<Action>| {
         for command in actions.iter_mut().filter_map(|a| a.command.as_mut()) {
-            if !matches!(command.opcode, Opcode::CMD_BuildSquad(_)) {
-                continue;
-            }
             let custom = &command.custom;
-            if custom.tag != 5 || custom.length != Some(4) || custom.data.len() != 4 {
+            let Some(kind) = blueprint_kind_for(command.opcode.value(), custom.tag, custom.length)
+            else {
+                continue;
+            };
+            if custom.data.len() < 4 || Some(custom.data.len() as u16) != custom.length {
                 continue;
             }
             let index = u32::from_le_bytes([
@@ -63,18 +94,18 @@ pub fn resolve_squad_names(
                 custom.data[2],
                 custom.data[3],
             ]);
-            command.squad_blueprint = catalogue.name(index).map(String::from);
-            if command.squad_blueprint.is_none() && warned.insert(index) {
-                eprintln!("warning: squad blueprint index {} is out of range", index);
+            command.blueprint = catalogues.get(kind).resolve(index);
+            if command.blueprint.is_none() && warned.insert((kind, index)) {
+                eprintln!(
+                    "warning: {} blueprint index {} is out of range",
+                    kind.as_str(),
+                    index
+                );
             }
         }
     };
     resolve(&mut replay.commands);
     resolve(&mut replay.actions);
-    replay.blueprints = Some(replay::BlueprintSource {
-        module: module.to_string(),
-        sbp_count: catalogue.len(),
-    });
 }
 
 pub fn parse_raw(file_path: String) -> Result<replay::ReplayInfo> {
@@ -87,9 +118,10 @@ pub fn parse_raw(file_path: String) -> Result<replay::ReplayInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actions::CustomPayload;
+    use actions::{CustomPayload, Opcode};
+    use blueprints::BlueprintKind;
 
-    fn build_action(opcode: u8, index: u32) -> Action {
+    fn action(opcode: u8, tag: u8, data: Vec<u8>) -> Action {
         let command = actions::Command {
             opcode: Opcode::new(opcode),
             sender_flags: 0,
@@ -98,37 +130,140 @@ mod tests {
             raw_context: [0; 4],
             receivers: Vec::new(),
             custom: CustomPayload {
-                tag: 5,
-                length: Some(4),
-                data: index.to_le_bytes().to_vec(),
+                tag,
+                length: Some(data.len() as u16),
+                data,
             },
-            squad_blueprint: None,
+            blueprint: None,
         };
         Action::from_decoded(Vec::new(), 0, command)
     }
 
-    #[test]
-    fn resolves_only_build_squad_with_in_range_index() {
-        let catalogue = blueprints::SbpCatalogue::from_paths(vec![
-            "simulation\\attrib\\sbps\\race_chaos\\csm_cultist.rbf".to_string(),
-            "simulation\\attrib\\sbps\\race_chaos\\csm_havoc.rbf".to_string(),
-        ]);
-        let mut replay = replay::ReplayInfo::default();
-        replay.commands = vec![
-            build_action(3, 1),
-            build_action(3, 99),
-            build_action(94, 1),
-        ];
-        resolve_squad_names(&mut replay, &catalogue, "Test.module");
+    fn index_action(opcode: u8, tag: u8, index: u32) -> Action {
+        action(opcode, tag, index.to_le_bytes().to_vec())
+    }
 
-        let names: Vec<_> = replay
-            .commands
-            .iter()
-            .map(|a| a.command.as_ref().unwrap().squad_blueprint.clone())
-            .collect();
-        assert_eq!(names, vec![Some("csm_havoc".to_string()), None, None]);
+    fn padded(index: u32, len: usize) -> Vec<u8> {
+        let mut data = index.to_le_bytes().to_vec();
+        data.resize(len, 0);
+        data
+    }
+
+    fn catalogues() -> blueprints::BlueprintCatalogues {
+        let mut paths = Vec::new();
+        for dir in ["ebps", "sbps", "upgrade", "ability"] {
+            for name in ["a", "b"] {
+                paths.push(format!(
+                    "simulation\\attrib\\{}\\pvp\\{}_{}.rbf",
+                    dir, dir, name
+                ));
+            }
+        }
+        blueprints::BlueprintCatalogues::from_paths(paths)
+    }
+
+    fn bp(a: &Action) -> Option<(BlueprintKind, String)> {
+        a.command
+            .as_ref()
+            .unwrap()
+            .blueprint
+            .as_ref()
+            .map(|b| (b.kind, b.name.clone()))
+    }
+
+    #[test]
+    fn kind_table() {
+        use BlueprintKind::*;
+        assert_eq!(blueprint_kind_for(3, 5, Some(4)), Some(Sbp));
+        assert_eq!(blueprint_kind_for(15, 5, Some(4)), Some(Upgrade));
+        assert_eq!(blueprint_kind_for(50, 5, Some(4)), Some(Upgrade));
+        assert_eq!(blueprint_kind_for(49, 5, Some(4)), Some(Ebp));
+        assert_eq!(blueprint_kind_for(78, 15, Some(35)), Some(Ebp));
+        assert_eq!(blueprint_kind_for(89, 16, Some(35)), Some(Ebp));
+        for tag in 25..=29 {
+            assert_eq!(blueprint_kind_for(53, tag, Some(5)), Some(Ability));
+            assert_eq!(blueprint_kind_for(85, tag, Some(20)), Some(Ability));
+        }
+        // Excluded forms.
+        assert_eq!(blueprint_kind_for(13, 25, Some(8)), None);
+        assert_eq!(blueprint_kind_for(53, 1, Some(8)), None);
+        assert_eq!(blueprint_kind_for(85, 1, Some(8)), None);
+        assert_eq!(blueprint_kind_for(53, 24, Some(8)), None);
+        assert_eq!(blueprint_kind_for(53, 30, Some(8)), None);
+        assert_eq!(blueprint_kind_for(53, 25, Some(4)), None);
+        assert_eq!(blueprint_kind_for(3, 5, Some(5)), None);
+        assert_eq!(blueprint_kind_for(3, 6, Some(4)), None);
+        assert_eq!(blueprint_kind_for(78, 15, Some(34)), None);
+        assert_eq!(blueprint_kind_for(89, 16, Some(36)), None);
+        assert_eq!(blueprint_kind_for(3, 5, None), None);
+        for op in [4, 16, 63, 64, 5, 51, 71, 90, 94, 96] {
+            assert_eq!(blueprint_kind_for(op, 5, Some(4)), None, "opcode {}", op);
+            assert_eq!(blueprint_kind_for(op, 17, Some(35)), None, "opcode {}", op);
+        }
+    }
+
+    #[test]
+    fn resolves_each_form_and_leaves_rest() {
+        let mut replay = replay::ReplayInfo {
+            commands: vec![
+                index_action(3, 5, 1),
+                index_action(15, 5, 0),
+                index_action(50, 5, 1),
+                index_action(49, 5, 0),
+                action(78, 15, padded(1, 35)),
+                action(89, 16, padded(0, 35)),
+                action(53, 26, padded(1, 9)),
+                action(85, 29, padded(0, 21)),
+                // Unresolved: excluded opcode, tag-1 ability, wrong length, out of range.
+                index_action(13, 25, 1),
+                action(53, 1, padded(1, 9)),
+                action(78, 15, padded(1, 34)),
+                index_action(3, 5, 99),
+                index_action(94, 5, 1),
+            ],
+            actions: vec![index_action(3, 5, 0)],
+            ..Default::default()
+        };
+        resolve_blueprints(&mut replay, &catalogues(), "Test.module");
+
+        let got: Vec<_> = replay.commands.iter().map(bp).collect();
+        let s = |k, n: &str| Some((k, n.to_string()));
+        assert_eq!(got[0], s(BlueprintKind::Sbp, "sbps_b"));
+        assert_eq!(got[1], s(BlueprintKind::Upgrade, "upgrade_a"));
+        assert_eq!(got[2], s(BlueprintKind::Upgrade, "upgrade_b"));
+        assert_eq!(got[3], s(BlueprintKind::Ebp, "ebps_a"));
+        assert_eq!(got[4], s(BlueprintKind::Ebp, "ebps_b"));
+        assert_eq!(got[5], s(BlueprintKind::Ebp, "ebps_a"));
+        assert_eq!(got[6], s(BlueprintKind::Ability, "ability_b"));
+        assert_eq!(got[7], s(BlueprintKind::Ability, "ability_a"));
+        assert!(got[8..].iter().all(Option::is_none));
+        assert_eq!(bp(&replay.actions[0]), s(BlueprintKind::Sbp, "sbps_a"));
+
+        let resolved = replay.commands[0]
+            .command
+            .as_ref()
+            .unwrap()
+            .blueprint
+            .clone()
+            .unwrap();
+        assert_eq!(resolved.path, "pvp\\sbps_b");
+        assert_eq!(resolved.index, 1);
+        let json = serde_json::to_value(replay.commands[0].command.as_ref().unwrap()).unwrap();
+        assert_eq!(json["blueprint"]["kind"], "sbp");
+        assert_eq!(json["blueprint"]["path"], "pvp\\sbps_b");
+        let json = serde_json::to_value(replay.commands[8].command.as_ref().unwrap()).unwrap();
+        assert!(json.get("blueprint").is_none());
+
         let source = replay.blueprints.unwrap();
         assert_eq!(source.module, "Test.module");
-        assert_eq!(source.sbp_count, 2);
+        assert_eq!(
+            (
+                source.ebp_count,
+                source.sbp_count,
+                source.upgrade_count,
+                source.ability_count
+            ),
+            (2, 2, 2, 2)
+        );
     }
 }
