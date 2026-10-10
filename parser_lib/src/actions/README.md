@@ -1,10 +1,18 @@
 # Historical action observations
 
-This table is retained for provenance only. It predates the corrected command
-framing and contains unverified field and ID interpretations from a small
-replay sample; it is not a cross-version unit or runtime-ID catalogue. Use
-the structured `ReplayInfo.commands` output and the repository replay-format
-notes for current wire fields.
+This table is retained for provenance only. It predates the corrected replay
+framing: command lengths are inclusive little-endian `u16` values preceded by
+one bundle-level length echo, so treating the first length byte as an action
+field shifts the opcode and drops the final payload byte. The numeric values
+below are samples from a small replay set, not stable names across game/mod
+versions; the old labels such as “unit identifier”, “item ID”, and the named
+action categories are unverified observations, not recovered engine semantics,
+and fields 11 and 15--19 are not a valid fixed-offset schema for the corrected
+command body. Use the structured `ReplayInfo.commands` output, the
+[replay-format note](../../../docs/replay-format.md) for the verified framing,
+ID namespaces, and unresolved mappings, and the
+[command-codec note](../../../docs/command-codec.md) for the bounded typed
+custom layouts and opaque-tag rules.
 
 # The action data block has the following format:
 
