@@ -93,8 +93,34 @@ scenario chunk `DATASDSC` (version 2008) starts at 216, followed by `FOLDINFO`
 (written at `0x42b694`) containing `DATABASE` (version 9) and one `FOLDGPLY`
 (version 4) per player slot with a `DATAINFO` (version 7) inside. `FOLDINFO`'s
 declared payload ends the header region; the outer records begin there. The
-individual `DATABASE` fields remain undocumented; the `DATAINFO` layout is
-below.
+individual `DATABASE` fields that are partly known (the random seed and the
+start-location flag) are described in the next section; the `DATAINFO` layout
+is below.
+
+## Game setup seed (`DATABASE`)
+
+The `DATABASE` (version 9) payload begins with three little-endian `u32`
+words. Word 3 is the game's random seed, a `time()` value; for example
+`0x6aca5bd0` is 2026-10-10 15:37:52 UTC.
+
+| Word | Destination | Meaning | Tier |
+| ---: | --- | --- | --- |
+| 1 | `GameInfo[0]` | not established | open |
+| 2 | `FUN_0041a21e` | not established | open |
+| 3 | `GameInfo[0x35e]` (+0xd78) | random seed | proven (reader path) |
+
+The seed path is `GameInfo_ReadFOLDINFO` (`0x0041af1a`), which stores word 3;
+`PopulateGameInfo` (`0x0044742a`), which calls `srand(seed)` and logs
+`PopulateGameInfo - random seed:[%u]`; and `GameInfo_ToGameSetup`
+(`0x0041b39a`), which copies it to the game setup's `randomSeed` (+0x31c). The
+corpus is consistent with this path. The seed is used by the player slot
+assignment described under "Player slots (runtime player IDs)".
+
+The `COLS` parameter in the `DATABASE` parameter list selects start locations:
+0 means random start locations, and a nonzero value means fixed locations.
+Tier: supported. The link from `COLS` to the shuffle's random flag is not traced
+in code; it rests on the corpus validation (all fixed-location replays only
+match when the shuffles are skipped).
 
 ## Player metadata (`DATAINFO`)
 
@@ -112,7 +138,7 @@ with their evidence tier:
 | 4 | string | race name (`space_marines`, ...; empty for observers) | supported |
 | 5 | u64 | profile/relic ID; `0xffffffffffffffff` for empty and AI slots | supported |
 | 6 | u32 | rank/level (16..60 observed; `-1` for empty slots) | supported |
-| 7 | u32 | 0 in all corpus blocks | observation |
+| 7 | u32 | runtime player ID slot (`GameInfoPlayer` +0x9c); always 0 in recordings, see below | proven field role; 0 in all corpus blocks |
 | 8 | u32 | 1 for the AI player in the corpus, otherwise 0 | observation |
 | 9 | u32 | small per-race index 0..5, `-1` for observers/empty; plausibly the hero/commander selection | observation |
 | 10 | u8 | 0/1 flag, meaning unresolved | observation |
@@ -124,8 +150,24 @@ with their evidence tier:
 | 16 | u32 | race enum: 0 chaos_marines, 1 eldar, 2 imperial_guard, 3 orks, 4 space_marines, 5 tyranids (alphabetical); `-1` for observers/empty | supported, consistent across all corpus blocks |
 
 All 48 player blocks in the six-file corpus (8 slots per file) decode under
-this layout with zero leftover bytes. Numeric fields 7..10 and the colour
+this layout with zero leftover bytes. Numeric fields 8..10 and the colour
 bytes are corpus observations, not writer-proven names.
+
+Field 7 is a runtime value, not a stored setting. The reader
+`GameInfoPlayer_ReadDATAINFO` (`0x0041ab06`) stores the fields after rank
+(field 6) in this order: field 7 at `GameInfoPlayer` +0x9c, field 8 at +0x2c,
+field 9 (hero) at +0x1c, field 10 (u8) at +0x20, and field 11 repeats the rank.
+The writer is `GameInfoPlayer_WriteDATAINFO` (`0x0041a9c1`). The recorder
+writes the header with `GameInfo_WriteFOLDINFO` (`0x0041ad12`, called at
+recording start from `0x42b694`) before player IDs are bound, so field 7 is
+always 0 in a recording. Save games restore it (`SaveGame_ReadGameInfo`,
+`0x004138f1`).
+
+Lobby members are placed in the block list by `GameInfo_FillPlayersFromLobby`
+(`0x0044618c`). Each member goes to record index `team * 4 + n`, where `n` is
+the number of members of that team placed so far, in lobby-list order. Team 0
+therefore occupies blocks 0..3 and team 1 blocks 4..7, with empty slots (kind 7)
+between them. No randomness is involved.
 
 ## Outer records and action commands
 
@@ -218,8 +260,10 @@ u8  custom_type       # 0xff means no custom field
 ... custom length and payload ...
 ```
 
-The sender byte's low seven bits are the sender slot in the engine's player-ID
-convention; `0x7f` is the no-sender value. Its high bit is the command process
+The sender byte's low seven bits are the sender slot, `playerID - 1000`
+(`Player::Base_PlayerID` = 1000); `0x7f` is the no-sender value.
+`WorldCommand_Serialize` (`0x0041e8da`) writes `(playerID - Base_PlayerID) |
+(flag << 7)`, and `WorldCommand_Deserialize` (`0x0041ea96`) reverses it. Its high bit is the command process
 type (the analysed handler uses value 1 for the process form). The old parser
 treated the first length byte as part of the action body, which shifted the
 opcode and discarded the last payload byte. For example, the 18-byte command
@@ -331,6 +375,50 @@ Consequently, two replays can give the same blueprint different receiver IDs
 because the blueprint/table index, squad factory sequence, and command timing
 are different namespaces and lifetimes.
 
+### Player slots (runtime player IDs)
+
+The engine player index is the sender slot, and the runtime player ID is
+`1000 + slot`. Slots are assigned by `GameSetup_AssignPlayersToMapSeats`
+(`0x0079df40`), which `GameSetup_AssignStartPositions` (`0x0079e880`)
+dispatches. Its inputs are the lobby blocks with kind 0, 1, 3 or 4 (in block
+order), the map's team layout, the game seed, and the `COLS` flag. The steps
+are:
+
+1. Create a `Random` `rng` with 4 rounds and call `rng.SetSeed(seed)`.
+2. The lobby members are the blocks with kind 0, 1, 3 or 4, in block order.
+   `GameInfo_ToGameSetup` appends them to the setup player array (stride 0x60:
+   team at +0x10, lobby block at +0x1c). They are then grouped by lobby team
+   (`GameSetup_GroupLobbyTeams`, `0x0079dc20`).
+3. The engine's map positions are grouped by map team (`GameSetup_GroupMapTeams`,
+   `0x0079dc90`). If the map defines no teams, the group of position `index` is
+   `index / (count / expectedTeams)`.
+4. If start locations are random (`COLS == 0`) (supported; see `COLS` above),
+   the map-team order is shuffled
+   with `random_shuffle`. For each lobby team `t` in ascending order, let
+   `list = mapTeams[order[t]]`; if locations are random, `list` is shuffled too.
+   Each member receives `list[p]`, where `p = block - 4t` if every member's
+   block lies in `[4t, 4t + |list|)` (`GameSetup_UseLobbySlotPositions`,
+   `0x0079dd90`), and otherwise `p` is the member's index within its team.
+5. The member's engine player index is its sender slot. The member's `list[p]`
+   value is the slot, and its runtime player ID is `1000 + slot`.
+
+`random_shuffle` (`random_shuffle_Random`, `0x007a1ed0`) runs for `i` from 1 to
+`n - 1` and swaps `a[i]` with `a[GetMax(i + 1)]`.
+
+The `Random` class in Util.dll is the Numerical Recipes `psdes` generator with
+state `{seed, index, rounds = 4}`. Each draw hashes `(seed, index)` and then
+increments `index`. The round constants are C1 = `baa96887 1e17d32c 03bcdc3c
+0f33d1b2` and C2 = `4b0f3b58 e874f0c3 6955c5a6 55a7ca46`. `GetMax(n)` returns
+`hash % n`. With seed 1 and index 1 the output is `0x509c0c23`, matching the
+published Numerical Recipes test value.
+
+Evidence tier: the code path is proven by the Ghidra analysis, and the result is
+supported by corpus validation. The rule reproduces 844 of 844 chat-identified
+seats across 249 replays (stock and Elite, random and fixed locations), and
+155 of 155 race-consistency checks across 26 Elite replays. Every validated game
+had a full lobby. The contiguous map-team grouping in step 3 is the engine's
+no-team fallback. It is unverified for partial lobbies.
+
 ### Why versions and mods mingle IDs
 
 The attribute loader creates groups in archive/load order. The RB2 path makes a
@@ -371,6 +459,15 @@ the boundary-checked samples:
 * the separation between blueprint `PropertyBagGroup` IDs, per-type
   group-table indices, and runtime squad receiver IDs; the three type bases;
   and the squad counter lifetime behavior;
+* the `DATABASE` word 3 random seed and its path into `srand` and the game
+  setup's `randomSeed`;
+* the `DATAINFO` field 7 role as the runtime player ID slot, the storage order
+  of fields 7..11, and the lobby block layout from `GameInfo_FillPlayersFromLobby`;
+* the sender byte encoding `playerID - 1000` in `WorldCommand_Serialize` and
+  `WorldCommand_Deserialize`;
+* the player-slot assignment code path (`GameSetup_AssignPlayersToMapSeats`)
+  and its `Random` and `random_shuffle` primitives, with the corpus validation
+  described in its section;
 * the five-sample totals reported by `replay_inspect.py`.
 
 These remain open and should not be guessed by a parser:
@@ -378,7 +475,7 @@ These remain open and should not be guessed by a parser:
 * the multiplayer aggregation rule for the sync command counter (per-peer
   origin is proven; the recorded value scales with bundle count empirically);
 * the eight reserved bundle-header bytes (zero in all 246,543 corpus bundles);
-* the `DATABASE` v9 chunk fields, and `DATAINFO` fields 7..10 and the exact
+* the meaning of `DATABASE` words 1 and 2, `DATAINFO` fields 8..10 and the exact
   colour-byte roles beyond the corpus observations above;
 * the chat payload's always-zero dword and the formal enum behind the team
   flag;
@@ -386,6 +483,8 @@ These remain open and should not be guessed by a parser:
 * the exact purchase/cancel handler mapping from blueprint/queue values to
   replay custom payloads;
 * complete RB2/RBF ordering rules across all releases and mods;
+* the slot-assignment rule for partial lobbies (the contiguous map-team
+  grouping is an unverified fallback);
 * a complete reconstruction of runtime group lifetimes from every command.
 
 The checksum and format version should be exposed to callers, and numeric IDs
