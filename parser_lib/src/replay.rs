@@ -51,7 +51,9 @@ pub struct ReplayInfo {
     pub date: String,
     pub ticks: u32,
     /// Lossless bounded header/chunk scan retained alongside legacy chunks.
+    #[serde(skip_serializing)]
     pub metadata: Option<MetadataScan>,
+    #[serde(skip_serializing)]
     pub sync_records: Vec<SyncRecord>,
     pub game: Chunk,
     pub map: Chunk,
