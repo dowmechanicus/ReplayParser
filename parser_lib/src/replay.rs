@@ -1,4 +1,6 @@
-use crate::{actions::Action, chunky::Chunk, message::Message, metadata::MetadataScan};
+use crate::{
+    actions::Action, chunky::Chunk, message::Message, metadata::MetadataScan, stats::PlayerStats,
+};
 
 /// An outer replay record whose type is not understood, or whose known
 /// payload could not be semantically decoded. Retaining the type and payload
@@ -65,6 +67,8 @@ pub struct ReplayInfo {
     pub commands: Vec<Action>,
     /// Legacy filtered view retained for existing consumers.
     pub actions: Vec<Action>,
+    /// Per-player order counts, derived from `commands` once seats are assigned.
+    pub stats: Vec<PlayerStats>,
     pub unknown_records: Vec<RawRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blueprints: Option<BlueprintSource>,

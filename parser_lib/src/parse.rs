@@ -74,6 +74,7 @@ pub fn parse_replay(path: &Path) -> Result<ReplayInfo, io::Error> {
     assign_seats(&mut replay);
     match_player_ids_from_seats(&mut replay);
     match_player_ids_from_messages(&mut replay);
+    replay.stats = crate::stats::compute(&replay);
 
     Ok(replay)
 }
@@ -907,5 +908,36 @@ mod tests {
         }
         assert!(seats.contains(&("RTS Cult".to_string(), 0, Some(0))));
         assert!(seats.contains(&("The great Cornholio".to_string(), 4, Some(1))));
+    }
+
+    #[test]
+    fn parse_fills_stats_for_one_on_one_sample() {
+        let (replay, _) = seats("recs/1.rec");
+        let counts: Vec<_> = replay
+            .stats
+            .iter()
+            .map(|s| {
+                (
+                    s.slot,
+                    s.name.as_deref(),
+                    s.actions,
+                    s.squads_built,
+                    s.retreats,
+                    s.reinforcements,
+                    s.hero_resurrections,
+                    s.point_captures,
+                    s.cancels,
+                )
+            })
+            .collect();
+        assert_eq!(
+            counts,
+            vec![
+                (0, Some("RTS Cult"), 1297, 7, 25, 9, 0, 68, 0),
+                (1, Some("The great Cornholio"), 1535, 5, 130, 61, 3, 37, 1),
+            ]
+        );
+        let json = serde_json::to_value(&replay).unwrap();
+        assert!(json["stats"].is_array());
     }
 }

@@ -24,6 +24,7 @@ mod replay;
 mod seats;
 #[allow(dead_code)]
 mod sga;
+mod stats;
 use parse::*;
 mod actions;
 

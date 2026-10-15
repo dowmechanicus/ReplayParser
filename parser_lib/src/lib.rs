@@ -21,6 +21,7 @@ pub mod rbf;
 pub mod replay;
 pub mod seats;
 pub mod sga;
+pub mod stats;
 pub mod ucs;
 use actions::Action;
 use parse::*;

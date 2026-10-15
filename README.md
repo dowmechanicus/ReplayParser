@@ -40,6 +40,7 @@ cargo run -p parser -- path/to/replay.rec
 ```
 
 To turn blueprint indices into names, see [section 7](#7-resolving-blueprint-names---module).
+For per-player order counts (the `stats` field), see [Replay statistics](#replay-statistics-stats).
 
 ### Status words
 
@@ -182,6 +183,50 @@ A replay records numeric references and a data checksum. It does not embed the c
 
 - **`ReplayInfo.commands`** is the complete structural view. Use this one.
 - **`ReplayInfo.actions`** is an older view. It is filtered for compatibility and omits some opcode values.
+
+### Replay statistics (`stats`)
+
+Every parse fills `ReplayInfo.stats`, so the field is always present in the JSON dump. There is no flag, and no game files or `--module` are needed. It is a JSON array with one object per player, sorted by slot.
+
+```bash
+cargo run -q -p parser -- path/to/replay.rec | jq .stats
+```
+
+Each object has the identity fields `slot`, `name`, `relic_id` and `race`, plus these counts:
+
+| field | counts |
+|---|---|
+| `actions` | every decoded command, including opcodes with no engine name such as 97 (counted, not interpreted) |
+| `squads_built` | opcode 3 `CMD_BuildSquad` |
+| `retreats` | opcode 61 `SCMD_Retreat` |
+| `reinforcements` | opcode 49 `SCMD_ReinforceUnit` |
+| `hero_resurrections` | opcode 96 `PCMD_ResurrectHero` |
+| `point_captures` | opcode 47 `SCMD_Capture` |
+| `cancels` | opcode 5 `CMD_CancelProduction` plus opcode 51 `SCMD_CancelProduction` |
+
+Caveats:
+
+- All counts are orders issued, not outcomes. A retreat, capture or reinforce order does not prove it happened.
+- `squads_built` includes orders that were later cancelled. Opcodes 5 and 51 carry per-producer queue ordinals ([section 4](#4-opcode-names)), so cancels cannot be matched to builds. `cancels` is reported separately and covers all producers, not just squads.
+- No opcode in the named set is a hero-death command. `hero_resurrections` is only a proxy, and it misses deaths that were never resurrected.
+- `point_captures` is one aggregate. The capture target is a runtime entity ID (custom tag 1, length 5, `[3, u32]`, where the first byte 3 is the entity target kind). No field in the command distinguishes requisition points from power points. The split is unresolved.
+- A command whose sender slot matches no seated player is reported in an extra entry with null `name`, `relic_id` and `race`. Players without an assigned slot get no entry of their own.
+- Counts come from `ReplayInfo.commands`, not the legacy `actions` view.
+
+Real `stats` output for `1v1.rec`, a local sample that is not committed to the repo:
+
+```json
+[
+  {"slot": 0, "name": "VindicareX", "relic_id": 10203601, "race": "space_marines",
+   "actions": 4323, "squads_built": 8, "retreats": 90, "reinforcements": 28,
+   "hero_resurrections": 0, "point_captures": 218, "cancels": 2},
+  {"slot": 1, "name": "^505LavrKornilov", "relic_id": 12370470, "race": "imperial_guard",
+   "actions": 4162, "squads_built": 7, "retreats": 82, "reinforcements": 67,
+   "hero_resurrections": 4, "point_captures": 234, "cancels": 5}
+]
+```
+
+The tool prints the same data in indented form. The layout above is condensed.
 
 ---
 
