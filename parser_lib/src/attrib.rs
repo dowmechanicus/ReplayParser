@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::module::{resolve_path, ModuleFile};
 use crate::sga::Archive;
@@ -18,7 +19,8 @@ enum Source {
 }
 
 pub struct AttribMount {
-    archives: Vec<(File, Archive)>,
+    /// Each archive's file sits behind a mutex because reads seek, then read, on one cursor.
+    archives: Vec<(Mutex<File>, Archive)>,
     index: HashMap<String, Source>,
 }
 
@@ -72,6 +74,10 @@ impl AttribMount {
         for (rel, full) in folders {
             index.entry(normalize(&rel)).or_insert(Source::Folder(full));
         }
+        let archives: Vec<(Mutex<File>, Archive)> = archives
+            .into_iter()
+            .map(|(file, archive)| (Mutex::new(file), archive))
+            .collect();
         for (a, (_, archive)) in archives.iter().enumerate() {
             for (e, entry) in archive.entries.iter().enumerate() {
                 index
@@ -99,15 +105,16 @@ impl AttribMount {
         }
     }
 
-    /// Contents of the winning copy of `path`. Reads share each archive's file cursor, so the
-    /// mount must not be read from several threads at once.
+    /// Contents of the winning copy of `path`. Safe to call from several threads: each archive's
+    /// seek and read run under one lock, so concurrent reads of an archive are serialised.
     pub fn read(&self, path: &str) -> io::Result<Vec<u8>> {
         match self.index.get(&normalize(path)) {
             Some(Source::Folder(full)) => fs::read(full),
             Some(Source::Archive { archive, entry }) => {
                 let (file, archive) = &self.archives[*archive];
-                let mut reader: &File = file;
-                archive.entries[*entry].read(&mut reader)
+                // A poisoned lock only means another reader panicked; the cursor is re-seeked.
+                let mut file = file.lock().unwrap_or_else(|e| e.into_inner());
+                archive.entries[*entry].read(&mut *file)
             }
             None => Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -200,6 +207,38 @@ mod tests {
             mount.read("simulation\\attrib\\z.rbf").unwrap_err().kind(),
             io::ErrorKind::NotFound
         );
+    }
+
+    #[test]
+    fn concurrent_reads_see_their_own_entry() {
+        let blob: Vec<u8> = (0..8u8)
+            .flat_map(|i| std::iter::repeat_n(b'a' + i, 4096))
+            .collect();
+        let (_, file) = temp_file("conc", &blob);
+        let entries = (0..8u64)
+            .map(|i| stored(&format!("simulation\\attrib\\e{}.rbf", i), i * 4096, 4096))
+            .collect();
+        let mount = AttribMount::from_parts(Vec::new(), vec![(file, Archive { entries })]);
+        std::thread::scope(|s| {
+            for t in 0..8u8 {
+                let mount = &mount;
+                s.spawn(move || {
+                    for round in 0..200u32 {
+                        let i = (u32::from(t) + round) % 8;
+                        let data = mount
+                            .read(&format!("simulation\\attrib\\e{}.rbf", i))
+                            .unwrap();
+                        assert_eq!(data, vec![b'a' + i as u8; 4096]);
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn mount_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<AttribMount>();
     }
 
     #[test]

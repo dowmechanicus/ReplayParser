@@ -42,10 +42,9 @@ fn run(args: Args) -> Result<(), String> {
     let game = resolve_module(args.module)
         .map(|p| GameData::open(&p))
         .transpose()?;
-    let chain = Chain::with_defaults(game.as_ref());
     match parser_lib::parse_raw(file) {
         Ok(mut replay) => {
-            chain.run(&mut replay, game.as_ref())?;
+            Chain::with_defaults(game.as_ref()).run(&mut replay)?;
             match parser_lib::to_json(&replay) {
                 Ok(json) => println!("{}", json),
                 Err(e) => println!("error: {}", e),

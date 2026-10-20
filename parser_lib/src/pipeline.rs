@@ -6,6 +6,7 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use crate::attrib::AttribMount;
 use crate::blueprints::BlueprintCatalogues;
@@ -51,6 +52,17 @@ impl GameData {
 
     pub fn mount(&self) -> &AttribMount {
         &self.mount
+    }
+
+    /// Game data with no files behind it, for tests.
+    #[cfg(test)]
+    fn empty_for_tests(install_dir: &Path) -> Self {
+        GameData {
+            module_path: install_dir.join("Test.module"),
+            install_dir: install_dir.to_path_buf(),
+            module_file: ModuleFile::default(),
+            mount: AttribMount::from_parts(Vec::new(), Vec::new()),
+        }
     }
 }
 
@@ -103,36 +115,67 @@ impl ReplayHandler for BlueprintHandler {
     }
 }
 
-/// Fills `display_name` on resolved blueprints.
+/// Fills `display_name` on resolved blueprints. The names load on the first `handle`, so a load
+/// failure warns after the blueprint handler's warnings; it is printed once and the handler
+/// then does nothing.
 struct DisplayNameHandler<'a> {
-    names: DisplayNames<'a>,
+    game: &'a GameData,
+    names: OnceLock<Option<DisplayNames<'a>>>,
 }
 
 impl ReplayHandler for DisplayNameHandler<'_> {
     fn handle(&self, replay: &mut ReplayInfo, _ctx: &Context) -> Result<(), HandlerError> {
-        crate::resolve_display_names(replay, &self.names);
+        let names = self.names.get_or_init(|| {
+            match DisplayNames::load(
+                self.game.mount(),
+                self.game.install_dir(),
+                self.game.module_file(),
+                DEFAULT_LANGUAGE,
+            ) {
+                Ok(names) => Some(names),
+                Err(e) => {
+                    eprintln!("warning: display names unavailable: {}", e);
+                    None
+                }
+            }
+        });
+        if let Some(names) = names {
+            crate::resolve_display_names(replay, names);
+        }
         Ok(())
     }
 }
 
-/// Handlers run in registration order over one replay.
+/// Handlers run in registration order over one replay. The chain borrows its game data.
 pub struct Chain<'a> {
+    game: Option<&'a GameData>,
     handlers: Vec<Box<dyn ReplayHandler + 'a>>,
+    /// Type name of each handler, in order, so tests can check what was registered.
+    #[cfg(test)]
+    names: Vec<&'static str>,
 }
 
 impl<'a> Chain<'a> {
-    /// A chain with no handlers.
+    /// A chain with no handlers and no game data.
     pub fn empty() -> Self {
+        Chain::new(None)
+    }
+
+    /// A chain with no handlers. `game` is what handlers see through [`Context::game`].
+    pub fn new(game: Option<&'a GameData>) -> Self {
         Chain {
+            game,
             handlers: Vec::new(),
+            #[cfg(test)]
+            names: Vec::new(),
         }
     }
 
     /// The built-in handlers: blueprint resolution, then display names. With no game data
-    /// nothing is registered. When display names fail to load, a warning is printed once and
-    /// that handler is skipped.
+    /// nothing is registered. The display names load when the chain first runs; if that fails,
+    /// a warning is printed once (after the blueprint handler's) and that handler does nothing.
     pub fn with_defaults(game: Option<&'a GameData>) -> Self {
-        let mut chain = Chain::empty();
+        let mut chain = Chain::new(game);
         let Some(game) = game else {
             return chain;
         };
@@ -140,15 +183,10 @@ impl<'a> Chain<'a> {
             catalogues: BlueprintCatalogues::from_mount(game.mount()),
             module: game.module_path().to_string_lossy().into_owned(),
         });
-        match DisplayNames::load(
-            game.mount(),
-            game.install_dir(),
-            game.module_file(),
-            DEFAULT_LANGUAGE,
-        ) {
-            Ok(names) => chain.push(DisplayNameHandler { names }),
-            Err(e) => eprintln!("warning: display names unavailable: {}", e),
-        }
+        chain.push(DisplayNameHandler {
+            game,
+            names: OnceLock::new(),
+        });
         chain
     }
 
@@ -160,13 +198,15 @@ impl<'a> Chain<'a> {
 
     /// Appends a handler.
     pub fn push(&mut self, handler: impl ReplayHandler + 'a) {
+        #[cfg(test)]
+        self.names.push(std::any::type_name_of_val(&handler));
         self.handlers.push(Box::new(handler));
     }
 
     /// Runs every handler in order. A `Warn` is printed to stderr and the chain continues; a
     /// `Fatal` stops it and its message is returned.
-    pub fn run(&self, replay: &mut ReplayInfo, game: Option<&GameData>) -> Result<(), String> {
-        let ctx = Context { game };
+    pub fn run(&self, replay: &mut ReplayInfo) -> Result<(), String> {
+        let ctx = Context { game: self.game };
         for handler in &self.handlers {
             match handler.handle(replay, &ctx) {
                 Ok(()) => {}
@@ -213,7 +253,16 @@ mod tests {
     }
 
     fn run(chain: &Chain) -> Result<(), String> {
-        chain.run(&mut ReplayInfo::default(), None)
+        chain.run(&mut ReplayInfo::default())
+    }
+
+    /// Short type names of the registered handlers.
+    fn handler_names(chain: &Chain) -> Vec<&'static str> {
+        chain
+            .names
+            .iter()
+            .map(|n| n.split('<').next().unwrap().rsplit("::").next().unwrap())
+            .collect()
     }
 
     #[test]
@@ -262,6 +311,49 @@ mod tests {
         let chain = chain.with(Fake::ok("custom", &log));
         assert_eq!(run(&chain), Ok(()));
         assert_eq!(*log.lock().unwrap(), ["custom"]);
+    }
+
+    #[test]
+    fn new_chain_exposes_its_game_to_handlers() {
+        struct Probe(Arc<Mutex<Option<PathBuf>>>);
+        impl ReplayHandler for Probe {
+            fn handle(&self, _: &mut ReplayInfo, ctx: &Context) -> Result<(), HandlerError> {
+                *self.0.lock().unwrap() = ctx.game().map(|g| g.install_dir().to_path_buf());
+                Ok(())
+            }
+        }
+        let game = GameData::empty_for_tests(Path::new("/nonexistent/install"));
+        let seen = Arc::new(Mutex::new(None));
+        let chain = Chain::new(Some(&game)).with(Probe(seen.clone()));
+        assert_eq!(chain.handlers.len(), 1);
+        assert_eq!(run(&chain), Ok(()));
+        assert_eq!(
+            seen.lock().unwrap().as_deref(),
+            Some(Path::new("/nonexistent/install"))
+        );
+    }
+
+    #[test]
+    fn defaults_with_game_register_blueprints_before_display_names() {
+        let game = GameData::empty_for_tests(Path::new("/nonexistent/install"));
+        let chain = Chain::with_defaults(Some(&game));
+        assert_eq!(
+            handler_names(&chain),
+            ["BlueprintHandler", "DisplayNameHandler"]
+        );
+    }
+
+    #[test]
+    fn unloadable_display_names_do_not_abort_the_chain() {
+        let game = GameData::empty_for_tests(Path::new("/nonexistent/install"));
+        let log = log();
+        let chain = Chain::with_defaults(Some(&game)).with(Fake::ok("after", &log));
+        let mut replay = ReplayInfo::default();
+        assert_eq!(chain.run(&mut replay), Ok(()));
+        assert!(replay.blueprints.is_some());
+        // The failed load is remembered: a second run neither retries nor fails.
+        assert_eq!(chain.run(&mut replay), Ok(()));
+        assert_eq!(*log.lock().unwrap(), ["after", "after"]);
     }
 
     #[test]

@@ -375,13 +375,22 @@ Post-parse processing in `parser_lib::pipeline` is a chain of handlers. Implemen
 the trait requires `Send + Sync`) and append it to the built-in chain:
 
 ```rust
-let game = GameData::open(&module_path)?;           // or None when no module is available
+let game = GameData::open(&module_path)?;          // pass None instead when no module is available
 let chain = Chain::with_defaults(Some(&game)).with(MyHandler);
-chain.run(&mut replay, Some(&game))?;
+chain.run(&mut replay)?;
 ```
 
+- The chain borrows the game data (`Chain<'a>` holds `Option<&'a GameData>`), so `game` must outlive
+  it. `run` takes only the replay and hands the stored game to handlers through `ctx.game()`.
+  `Chain::new(Some(&game))` is the same without the built-in handlers, and `Chain::empty()` has
+  neither handlers nor game data.
+- `GameData`, `Chain` and `ReplayHandler` are `Send + Sync`: reads from one mount may come from
+  several threads, and a chain can run over several replays at once (each archive's file is
+  locked while an entry is read). A custom handler must be `Send + Sync` itself.
 - `with_defaults` registers blueprint resolution, then display names, so those run first. With
-  `None` it registers nothing. Handlers added with `.with()` or `.push()` run after, in
+  `None` it registers nothing. The display names load on the first `run`, after the blueprint
+  handler; if loading fails, `warning: display names unavailable: <error>` is printed once and
+  that handler does nothing. Handlers added with `.with()` or `.push()` run after, in
   registration order.
 - `HandlerError::Warn(msg)` prints `warning: <msg>` to stderr and the chain continues.
   `HandlerError::Fatal(msg)` stops the chain and `run` returns `Err(msg)`.
