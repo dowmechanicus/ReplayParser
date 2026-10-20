@@ -17,6 +17,7 @@ pub mod metadata;
 pub mod module;
 pub mod names;
 mod parse;
+pub mod pipeline;
 pub mod rbf;
 pub mod replay;
 pub mod seats;
@@ -25,6 +26,7 @@ pub mod stats;
 pub mod ucs;
 use actions::Action;
 use parse::*;
+pub use pipeline::{Chain, Context, GameData, HandlerError, ReplayHandler};
 use std::collections::{BTreeSet, HashMap};
 
 pub fn parse_file(file_path: String) -> Option<String> {

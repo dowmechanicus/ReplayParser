@@ -368,6 +368,26 @@ For `temp.rec`, all 1014 `blueprint` objects (counting `commands` and `actions`)
 - **Reinforce resolves to the model entity.** Opcode 49 resolves to the *model* entity. Some models carry another unit's string: the EBP `sm_sternguard_veteran` shows "Tactical Marine". So the name can differ from the squad that was reinforced.
 - **Other builds.** On a replay from a different build, display names are as wrong as the indices. They look more convincing than a file stem, so compare `mod_chksum` before trusting either.
 
+### Extending the handler chain
+
+Post-parse processing in `parser_lib::pipeline` is a chain of handlers. Implement
+`ReplayHandler` (`fn handle(&self, replay: &mut ReplayInfo, ctx: &Context) -> Result<(), HandlerError>`;
+the trait requires `Send + Sync`) and append it to the built-in chain:
+
+```rust
+let game = GameData::open(&module_path)?;           // or None when no module is available
+let chain = Chain::with_defaults(Some(&game)).with(MyHandler);
+chain.run(&mut replay, Some(&game))?;
+```
+
+- `with_defaults` registers blueprint resolution, then display names, so those run first. With
+  `None` it registers nothing. Handlers added with `.with()` or `.push()` run after, in
+  registration order.
+- `HandlerError::Warn(msg)` prints `warning: <msg>` to stderr and the chain continues.
+  `HandlerError::Fatal(msg)` stops the chain and `run` returns `Err(msg)`.
+- `ctx.game()` is `None` when the chain runs without a module, so handlers that need game
+  files must check it. The chain still runs in that case.
+
 ---
 
 ## 8. Historical observations
