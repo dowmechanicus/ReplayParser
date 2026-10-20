@@ -1,46 +1,57 @@
 use std::env;
-use std::path::Path;
+use std::path::PathBuf;
+use std::process;
 
-extern crate byteorder;
-extern crate serde;
-extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate crypto;
+use parser_lib::pipeline::{Chain, GameData};
 
-#[allow(dead_code)]
-mod attrib;
-#[allow(dead_code)]
-mod blueprints;
-mod chunky;
-mod message;
-#[allow(dead_code)]
-mod metadata;
-#[allow(dead_code)]
-mod module;
-mod parse;
-#[allow(dead_code)]
-mod replay;
-mod seats;
-#[allow(dead_code)]
-mod sga;
-mod stats;
-use parse::*;
-mod actions;
+/// Replay file (first non-flag argument) and the optional `--module <path>`.
+fn parse_args(
+    args: impl Iterator<Item = String>,
+) -> Result<(Option<String>, Option<PathBuf>), String> {
+    let mut file = None;
+    let mut module = None;
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        if arg == "--module" {
+            module = Some(PathBuf::from(args.next().ok_or("--module needs a path")?));
+        } else if file.is_none() {
+            file = Some(arg);
+        }
+    }
+    Ok((file, module))
+}
 
 fn main() {
-    if let Some(arg) = env::args().nth(1) {
-        let path = Path::new(&arg);
-        let replay = match parse_replay(path) {
-            Ok(r) => r,
-            Err(e) => {
-                println!("error: {}", e);
-                std::process::exit(1);
-            }
-        };
-        let json = serde_json::to_string_pretty(&replay).unwrap();
-        println!("{}", json);
-    } else {
+    let (file, module) = match parse_args(env::args().skip(1)) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            println!("error: {}", e);
+            process::exit(1);
+        }
+    };
+    let Some(file) = file else {
         println!("must supply a file");
+        return;
+    };
+
+    let game = match module.as_deref().map(GameData::open).transpose() {
+        Ok(game) => game,
+        Err(e) => {
+            println!("error: {}", e);
+            process::exit(1);
+        }
+    };
+    let mut replay = match parser_lib::parse_raw(file) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("error: {}", e);
+            process::exit(1);
+        }
+    };
+    if let Err(e) = Chain::with_defaults(game.as_ref()).run(&mut replay) {
+        println!("error: {}", e);
+        process::exit(1);
     }
+    let json = serde_json::to_string_pretty(&replay).unwrap();
+    println!("{}", json);
 }
