@@ -1,63 +1,62 @@
-use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 
-use parser_lib;
+use clap::Parser;
 use parser_lib::attrib::AttribMount;
 use parser_lib::blueprints::BlueprintCatalogues;
 use parser_lib::module::ModuleFile;
 use parser_lib::names::{DisplayNames, DEFAULT_LANGUAGE};
 
+mod discover;
+
+#[derive(Parser)]
+struct Args {
+    /// Replay file to parse.
+    file: PathBuf,
+    /// Path to Elite.module, used to resolve blueprint names (auto-located when omitted).
+    #[arg(long)]
+    module: Option<PathBuf>,
+}
+
 fn main() {
-    let mut file = None;
-    let mut module = None;
-    let mut args = env::args().skip(1);
-    while let Some(arg) = args.next() {
-        if arg == "--module" {
-            match args.next() {
-                Some(path) => module = Some(path),
-                None => {
-                    eprintln!("--module requires a path");
-                    process::exit(1);
-                }
-            }
-        } else if file.is_none() {
-            file = Some(arg);
-        }
+    if let Err(e) = run(Args::parse()) {
+        eprintln!("{}", e);
+        process::exit(1);
     }
+}
 
-    let Some(file) = file else {
-        println!("No input file specified");
-        return;
-    };
-
-    let Some(module) = module else {
-        match parser_lib::parse_file(file) {
-            Some(json) => println!("{}", json),
-            None => println!("File could not be parsed"),
+/// The explicit `--module` path, else Elite.module found through Steam (DOW2_INSTALL first).
+fn resolve_module(explicit: Option<PathBuf>) -> Option<PathBuf> {
+    explicit.or_else(|| match discover::locate_elite_module() {
+        Ok(path) => {
+            eprintln!("info: auto-located module: {}", path.display());
+            Some(path)
         }
-        return;
+        Err(e) => {
+            eprintln!("warning: {}", e);
+            None
+        }
+    })
+}
+
+fn run(args: Args) -> Result<(), String> {
+    let file = args.file.to_string_lossy().into_owned();
+
+    let Some(module_path) = resolve_module(args.module) else {
+        if let Some(json) = parser_lib::parse_file(file) {
+            println!("{}", json);
+        }
+        return Ok(());
     };
 
-    let module_path = Path::new(&module);
+    let read_err = |e| format!("could not read module {}: {}", module_path.display(), e);
     let install_dir = module_path.parent().unwrap_or_else(|| Path::new("."));
-    let module_file = match ModuleFile::open(module_path) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("could not read module {}: {}", module, e);
-            process::exit(1);
-        }
-    };
-    let mount = match AttribMount::open(install_dir, &module_file) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("could not read module {}: {}", module, e);
-            process::exit(1);
-        }
-    };
+    let module_file = ModuleFile::open(&module_path).map_err(read_err)?;
+    let mount = AttribMount::open(install_dir, &module_file).map_err(read_err)?;
     let catalogue = BlueprintCatalogues::from_mount(&mount);
     match parser_lib::parse_raw(file) {
         Ok(mut replay) => {
+            let module = module_path.to_string_lossy();
             parser_lib::resolve_blueprints(&mut replay, &catalogue, &module);
             match DisplayNames::load(&mount, install_dir, &module_file, DEFAULT_LANGUAGE) {
                 Ok(names) => parser_lib::resolve_display_names(&mut replay, &names),
@@ -72,5 +71,17 @@ fn main() {
             println!("error: {}", e);
             println!("null");
         }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_module_is_returned_untouched() {
+        let path = PathBuf::from("/nonexistent/Elite.module");
+        assert_eq!(resolve_module(Some(path.clone())), Some(path));
     }
 }

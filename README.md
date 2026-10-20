@@ -29,6 +29,7 @@ The old named examples are kept in the [appendix](#appendix-raw-sample-tables) a
 | See the row-by-row disposition and static evidence for every old action row | [`docs/action-table-audit.md`](docs/action-table-audit.md) |
 | Understand the container format and the blueprint, purchase and runtime ID namespaces | [`docs/replay-format.md`](docs/replay-format.md) |
 | Learn the RBF, field-name and UCS formats, the archive override rule, and what is verified or hypothesis | [`docs/game-data-formats.md`](docs/game-data-formats.md) |
+| Find `Elite.module` without `--module` | [`docs/module-discovery.md`](docs/module-discovery.md) |
 | Validate replay boundaries before assigning gameplay meanings | `tools/replay_inspect.py` |
 
 ### Quick start
@@ -39,6 +40,7 @@ Dump the parser's full structure as JSON, then inspect `.commands`:
 cargo run -p parser -- path/to/replay.rec
 ```
 
+The replay path is required; a missing path or an unknown argument is a usage error (non-zero exit).
 To turn blueprint indices into names, see [section 7](#7-resolving-blueprint-names---module).
 For per-player order counts (the `stats` field), see [Replay statistics](#replay-statistics-stats).
 
@@ -239,6 +241,19 @@ Pass the install's module file to turn blueprint indices into names:
 ```text
 cargo run -q -p parser -- temp.rec --module "<install>/Elite.module"
 ```
+
+Without `--module`, the parser tries to find `Elite.module` itself, in this order (details and
+verification status in [`docs/module-discovery.md`](docs/module-discovery.md)):
+
+1. `DOW2_INSTALL`, when set: `Elite.module` directly in that directory;
+2. Steam (via the `steamlocate` crate): Retribution (app 56400) first, then the Anniversary
+   Edition (15620), then a scan of every library's `steamapps\common\*\Elite.module`.
+
+An app-id match wins over a scan match. Only *installed* apps are seen (steamlocate reads
+`appmanifest_*.acf`). When several candidates are found, the first by that order is used and
+stderr lists them all. When none is found, the parse continues without names and stderr says
+so. An auto-located module behaves exactly like a `--module` argument: its path lands in
+`ReplayInfo.blueprints.module`, and the install dir is the module's parent.
 
 ### How catalogues are built
 
