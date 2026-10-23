@@ -1,7 +1,7 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
-#[derive(Default, Serialize)]
+#[derive(Clone, Default, Serialize)]
 pub struct Game {
     pub name: String,
     pub mode: String,
@@ -14,7 +14,7 @@ pub struct Game {
 pub struct Data {
     pub duration: u32,
 }
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Map {
     pub name: String,
     pub description: String,
