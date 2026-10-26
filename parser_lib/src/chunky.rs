@@ -1,16 +1,26 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Game {
     pub name: String,
+    /// Name of the first win condition, or "None" if the list is empty.
     pub mode: String,
     pub resources: String,
     pub locations: String,
     pub victory_points: u32,
     pub random_seed: u32,
+    /// Every win-condition ID stored in the replay, in file order.
+    pub win_conditions: Vec<WinCondition>,
 }
-#[derive(Serialize)]
+/// One entry of the `DATABASE` win-condition list.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct WinCondition {
+    /// CRC32 of the win-condition `.scar` file's contents.
+    pub id: u32,
+    pub name: String,
+}
+#[derive(Debug, Serialize)]
 pub struct Data {
     pub duration: u32,
 }
@@ -49,7 +59,7 @@ pub struct Player {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player_id: Option<u32>,
 }
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum Chunk {
     Game(Game),
@@ -132,11 +142,39 @@ fn parse_sdsc(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     }))
 }
 
+/// Display name for a win-condition ID from the `DATABASE` chunk. The game
+/// stores the CRC32 of the win-condition `.scar` file's contents, so the ID
+/// depends on the game data or mod that was loaded (see
+/// docs/replay-format.md, "Win conditions").
+fn win_condition_name(id: u32) -> String {
+    let name = match id {
+        // Stock Retribution data (000_data.sga)
+        0x5286_c903 => "Annihilation",
+        0xa5d2_fc11 => "Free For All (solo)",
+        0x0575_0182 => "Free For All (team)",
+        0x1576_eb00 => "Victory Point Control",
+        // Elite mod (Elite_Data_18_Misc.sga)
+        0x69b1_8aa9 => "Annihilation",
+        0xc156_f468 => "Free For All (solo)",
+        0x776c_a03b => "Free For All (team)",
+        0xfc03_e252 => "Victory Point Control",
+        0xc843_8f73 => "Annihilate - Hero Assault",
+        0xe034_f94e => "Massive Battles - Annihilate",
+        0x1aaf_d5c8 => "VPC - Hero Assault (500 points)",
+        0x978d_d4ce => "Massive Battles - VPC (750 points)",
+        0xa049_9908 => "[VPC] Sandbox Mode",
+        0xba07_9905 => "[Event] Night Fighting",
+        0xe51d_3657 => "Tabletop Mode",
+        _ => return format!("Unknown win condition 0x{id:08x}"),
+    };
+    name.to_owned()
+}
+
 fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     let mut vpc = 0;
     let mut resources = String::new();
     let mut locations = String::new();
-    let mut mode = "Annihilation".to_owned();
+    let mut win_conditions: Vec<WinCondition> = Vec::new();
     // Word 3 is the game's random seed.
     cursor.seek(SeekFrom::Current(8))?;
     let random_seed = cursor.read_u32::<LittleEndian>()?;
@@ -161,11 +199,15 @@ fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
     cursor.seek(SeekFrom::Current(4))?;
     let nconds = cursor.read_u32::<LittleEndian>()?;
     for _ in 0..nconds {
-        let i = cursor.read_u32::<LittleEndian>()?;
-        if i == 0x1576eb00 {
-            mode = "Victory Point Control".to_owned();
-        }
+        let id = cursor.read_u32::<LittleEndian>()?;
+        win_conditions.push(WinCondition {
+            id,
+            name: win_condition_name(id),
+        });
     }
+    let mode = win_conditions
+        .first()
+        .map_or_else(|| "None".to_owned(), |condition| condition.name.clone());
     cursor.seek(SeekFrom::Current(12))?;
 
     Ok(Chunk::Game(Game {
@@ -175,6 +217,7 @@ fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
         locations,
         victory_points: vpc,
         random_seed,
+        win_conditions,
     }))
 }
 
@@ -289,6 +332,62 @@ mod tests {
             Chunk::Game(game) => {
                 assert_eq!(game.random_seed, 0x5622_3305);
                 assert_eq!(game.locations, "Random");
+            }
+            _ => panic!("expected a game chunk"),
+        }
+    }
+
+    fn base_chunk_with_conditions(ids: &[u32]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for word in [1u32, 2, 3] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // nparams
+        bytes.push(0);
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // empty name
+        bytes.extend_from_slice(&[0; 4]);
+        bytes.extend_from_slice(&(ids.len() as u32).to_le_bytes()); // nconds
+        for id in ids {
+            bytes.extend_from_slice(&id.to_le_bytes());
+        }
+        bytes.extend_from_slice(&[0; 12]);
+        bytes
+    }
+
+    fn mode_of(ids: &[u32]) -> String {
+        match parse_base(&mut Cursor::new(base_chunk_with_conditions(ids))).unwrap() {
+            Chunk::Game(game) => game.mode,
+            _ => panic!("expected a game chunk"),
+        }
+    }
+
+    #[test]
+    fn names_stock_and_elite_victory_point_control() {
+        assert_eq!(mode_of(&[0x1576_eb00]), "Victory Point Control");
+        assert_eq!(mode_of(&[0xfc03_e252]), "Victory Point Control");
+    }
+
+    #[test]
+    fn reports_unknown_and_multiple_win_conditions() {
+        assert_eq!(mode_of(&[0x1234_5678]), "Unknown win condition 0x12345678");
+        assert_eq!(mode_of(&[]), "None");
+
+        let bytes = base_chunk_with_conditions(&[0x5286_c903, 0xe51d_3657]);
+        match parse_base(&mut Cursor::new(bytes)).unwrap() {
+            Chunk::Game(game) => {
+                assert_eq!(game.mode, "Annihilation");
+                let listed: Vec<(u32, &str)> = game
+                    .win_conditions
+                    .iter()
+                    .map(|condition| (condition.id, condition.name.as_str()))
+                    .collect();
+                assert_eq!(
+                    listed,
+                    vec![
+                        (0x5286_c903, "Annihilation"),
+                        (0xe51d_3657, "Tabletop Mode")
+                    ]
+                );
             }
             _ => panic!("expected a game chunk"),
         }
