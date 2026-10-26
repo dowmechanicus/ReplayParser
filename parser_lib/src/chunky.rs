@@ -4,8 +4,9 @@ use std::io::{self, Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct Game {
     pub name: String,
-    /// Name of the first win condition, or "None" if the list is empty.
-    pub mode: String,
+    /// The first win condition, or `None` if the list is empty. Serialized as its name, or "None".
+    #[serde(serialize_with = "serialize_mode")]
+    pub mode: Option<WinCondition>,
     pub resources: String,
     pub locations: String,
     pub victory_points: u32,
@@ -19,6 +20,20 @@ pub struct WinCondition {
     /// CRC32 of the win-condition `.scar` file's contents.
     pub id: u32,
     pub name: String,
+}
+impl std::fmt::Display for WinCondition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+fn serialize_mode<S: serde::Serializer>(
+    mode: &Option<WinCondition>,
+    s: S,
+) -> Result<S::Ok, S::Error> {
+    match mode {
+        Some(condition) => s.collect_str(condition),
+        None => s.serialize_str("None"),
+    }
 }
 #[derive(Debug, Serialize)]
 pub struct Data {
@@ -205,9 +220,7 @@ fn parse_base(cursor: &mut Cursor<Vec<u8>>) -> Result<Chunk, io::Error> {
             name: win_condition_name(id),
         });
     }
-    let mode = win_conditions
-        .first()
-        .map_or_else(|| "None".to_owned(), |condition| condition.name.clone());
+    let mode = win_conditions.first().cloned();
     cursor.seek(SeekFrom::Current(12))?;
 
     Ok(Chunk::Game(Game {
@@ -354,28 +367,40 @@ mod tests {
         bytes
     }
 
-    fn mode_of(ids: &[u32]) -> String {
+    fn mode_of(ids: &[u32]) -> Option<String> {
         match parse_base(&mut Cursor::new(base_chunk_with_conditions(ids))).unwrap() {
-            Chunk::Game(game) => game.mode,
+            Chunk::Game(game) => game.mode.map(|condition| condition.to_string()),
             _ => panic!("expected a game chunk"),
         }
     }
 
     #[test]
     fn names_stock_and_elite_victory_point_control() {
-        assert_eq!(mode_of(&[0x1576_eb00]), "Victory Point Control");
-        assert_eq!(mode_of(&[0xfc03_e252]), "Victory Point Control");
+        assert_eq!(
+            mode_of(&[0x1576_eb00]).as_deref(),
+            Some("Victory Point Control")
+        );
+        assert_eq!(
+            mode_of(&[0xfc03_e252]).as_deref(),
+            Some("Victory Point Control")
+        );
     }
 
     #[test]
     fn reports_unknown_and_multiple_win_conditions() {
-        assert_eq!(mode_of(&[0x1234_5678]), "Unknown win condition 0x12345678");
-        assert_eq!(mode_of(&[]), "None");
+        assert_eq!(
+            mode_of(&[0x1234_5678]).as_deref(),
+            Some("Unknown win condition 0x12345678")
+        );
+        assert_eq!(mode_of(&[]), None);
 
         let bytes = base_chunk_with_conditions(&[0x5286_c903, 0xe51d_3657]);
         match parse_base(&mut Cursor::new(bytes)).unwrap() {
             Chunk::Game(game) => {
-                assert_eq!(game.mode, "Annihilation");
+                assert_eq!(
+                    game.mode.map(|c| c.to_string()).as_deref(),
+                    Some("Annihilation")
+                );
                 let listed: Vec<(u32, &str)> = game
                     .win_conditions
                     .iter()
@@ -390,6 +415,20 @@ mod tests {
                 );
             }
             _ => panic!("expected a game chunk"),
+        }
+    }
+
+    #[test]
+    fn serializes_mode_as_plain_string() {
+        for (ids, expected) in [(&[0x5286_c903u32][..], "Annihilation"), (&[][..], "None")] {
+            match parse_base(&mut Cursor::new(base_chunk_with_conditions(ids))).unwrap() {
+                Chunk::Game(game) => {
+                    let json = serde_json::to_value(&game).unwrap();
+                    assert_eq!(json["mode"], expected);
+                    assert_eq!(json["win_conditions"].as_array().unwrap().len(), ids.len());
+                }
+                _ => panic!("expected a game chunk"),
+            }
         }
     }
 }
