@@ -170,6 +170,162 @@ several such names are independently corroborated by their receive-side
 handlers, but no explicit value constant names them. All names are
 build-scoped; a mod or other game version may renumber them.
 
+### Full name table (all 100 slots)
+
+The three name-pointer arrays were read directly from `DOW2.exe` (2026-10-26)
+with the opcode rule above (`CMD_*` index = opcode, `SCMD_*` base 41,
+`PCMD_*` base 78). The parser's `Opcode` enum names 28 of these; the rest
+decode as `Opcode::Unknown`. Tier: **supported** (array position) unless a
+second source is listed. Opcode 77 has no slot. The `CMD_*` array has a 42nd
+entry, the string `last_stand_scar`, at the position of opcode 41; it is not
+a command name (41 is `SCMD_DefaultAction`).
+
+| opcode | engine name | in parser enum | corpus | second source |
+|---|---|---|---|---|
+| 0 | `CMD_DefaultAction` | no | not observed | |
+| 1 | `CMD_Stop` | yes | not observed | |
+| 2 | `CMD_Destroy` | yes | observed | |
+| 3 | `CMD_BuildSquad` | yes | observed | |
+| 4 | `CMD_InstantBuildSquad` | no | not observed | cheat/instant permission table `0x12bbec8` |
+| 5 | `CMD_CancelProduction` | yes | observed | |
+| 6 | `CMD_BuildStructure` | no | not observed | |
+| 7 | `CMD_Move` | no | not observed | |
+| 8 | `CMD_Face` | no | not observed | |
+| 9 | `CMD_Attack` | yes | observed | |
+| 10 | `CMD_AttackMove` | no | not observed | |
+| 11 | `CMD_RallyPoint` | yes | observed | |
+| 12 | `CMD_Capture` | no | not observed | |
+| 13 | `CMD_Ability` | yes | observed | |
+| 14 | `CMD_Evacuate` | no | not observed | |
+| 15 | `CMD_Upgrade` | yes | observed | |
+| 16 | `CMD_InstantUpgrade` | no | not observed | permission table `0x12bbec8` |
+| 17 | `CMD_ChooseResource` | no | not observed | |
+| 18 | `CMD_Load` | no | not observed | |
+| 19 | `CMD_InstantLoad` | no | not observed | |
+| 20 | `CMD_Unload` | no | not observed | |
+| 21 | `CMD_MoveToSlot` | no | not observed | |
+| 22 | `CMD_MoveAwayFromSlot` | no | not observed | |
+| 23 | `CMD_UnloadSquads` | yes | observed | |
+| 24 | `CMD_AttackStop` | no | not observed | |
+| 25 | `CMD_AttackForced` | no | not observed | |
+| 26 | `CMD_DirectControlAim` | no | not observed | |
+| 27 | `CMD_DirectControlShoot` | no | not observed | |
+| 28 | `CMD_Halt` | no | not observed | |
+| 29 | `CMD_Fidget` | no | not observed | |
+| 30 | `CMD_Casualty` | no | not observed | |
+| 31 | `CMD_Death` | no | not observed | |
+| 32 | `CMD_InstantDeath` | no | not observed | |
+| 33 | `CMD_Projectile` | no | not observed | |
+| 34 | `CMD_MeleeAttack` | no | not observed | |
+| 35 | `CMD_Jump` | no | not observed | |
+| 36 | `CMD_Knockback` | no | not observed | |
+| 37 | `CMD_SetWeaponStance` | no | not observed | |
+| 38 | `CMD_Unconscious` | no | not observed | |
+| 39 | `CMD_GrantWargear` | no | not observed | |
+| 40 | `CMD_Falling` | no | not observed | |
+| 41 | `SCMD_DefaultAction` | no | not observed | |
+| 42 | `SCMD_FlushQueue` | no | not observed | |
+| 43 | `SCMD_Stop` | yes | observed | |
+| 44 | `SCMD_Move` | yes | observed | |
+| 45 | `SCMD_Destroy` | no | not observed | |
+| 46 | `SCMD_BuildStructure` | no | not observed | |
+| 47 | `SCMD_Capture` | yes | observed | |
+| 48 | `SCMD_Attack` | yes | observed | |
+| 49 | `SCMD_ReinforceUnit` | yes | observed | |
+| 50 | `SCMD_Upgrade` | yes | observed | |
+| 51 | `SCMD_CancelProduction` | yes | observed | |
+| 52 | `SCMD_AttackMove` | yes | observed | |
+| 53 | `SCMD_Ability` | yes | observed | |
+| 54 | `SCMD_Attach` | no | not observed | |
+| 55 | `SCMD_Detach` | no | not observed | |
+| 56 | `SCMD_Load` | yes | observed | |
+| 57 | `SCMD_InstantLoad` | no | not observed | permission table `0x12bbec8` |
+| 58 | `SCMD_UnloadSquads` | yes | not observed | |
+| 59 | `SCMD_Unload` | no | not observed | |
+| 60 | `SCMD_SlotItemRemove` | no | not observed | |
+| 61 | `SCMD_Retreat` | yes | observed | |
+| 62 | `SCMD_SetMoveType` | no | not observed | |
+| 63 | `SCMD_InstantReinforceUnit` | no | not observed | permission table `0x12bbec8` |
+| 64 | `SCMD_InstantUpgrade` | no | not observed | permission table `0x12bbec8` |
+| 65 | `SCMD_SetCamouflageStance` | no | not observed | |
+| 66 | `SCMD_Patrol` | no | not observed | |
+| 67 | `SCMD_Surprise` | no | not observed | |
+| 68 | `SCMD_StationaryAttack` | no | not observed | |
+| 69 | `SCMD_Face` | no | not observed | |
+| 70 | `SCMD_Melee` | yes | observed | |
+| 71 | `SCMD_SetWeaponStance` | yes | observed | |
+| 72 | `SCMD_Jump` | no | not observed | |
+| 73 | `SCMD_HunkerDown` | no | not observed | |
+| 74 | `SCMD_Pickup` | no | not observed | |
+| 75 | `SCMD_Plan` | no | not observed | |
+| 76 | `SCMD_Worship` | no | not observed | |
+| 78 | `PCMD_ConstructStructure` | yes | observed | |
+| 79 | `PCMD_ChangeAlliance` | no | not observed | ModPlayer switch routes it to the reject label `0x7e79f9` |
+| 80 | `PCMD_RequisitionDonation` | no | not observed | permission table `0x12bbec8` |
+| 81 | `PCMD_MunitionDonation` | no | not observed | permission table `0x12bbec8` |
+| 82 | `PCMD_CheatResources` | no | not observed | permission table; UI issuer `push 0x52` |
+| 83 | `PCMD_CheatRevealAll` | no | not observed | permission table; UI issuer `push 0x53` |
+| 84 | `PCMD_CheatKillSelf` | no | not observed | permission table; UI issuer `push 0x54`; defeats the sender |
+| 85 | `PCMD_Ability` | yes | observed | |
+| 86 | `PCMD_CheatBuildTime` | no | not observed | permission table; UI issuer `push 0x56` |
+| 87 | `PCMD_Upgrade` | no | not observed | `CommandProxy_Upgrade` issuer |
+| 88 | `PCMD_InstantUpgrade` | no | not observed | permission table `0x12bbec8` |
+| 89 | `PCMD_ConstructFence` | yes | observed | |
+| 90 | `PCMD_ConstructField` | no | not observed | `CommandProxy_ConstructField` issuer |
+| 91 | `PCMD_UpgradeRemove` | no | not observed | |
+| 92 | `PCMD_SlotItemRemove` | no | not observed | `CommandProxy_SlotItemRemove` issuer |
+| 93 | `PCMD_CancelProduction` | no | not observed | `CommandProxy_CancelProduction` issuer |
+| 94 | `PCMD_Ping` | yes | observed | |
+| 95 | `PCMD_WaitObjectDone` | no | not observed | |
+| 96 | `PCMD_ResurrectHero` | yes | observed | |
+| 97 | `PCMD_ConcessionSuccessful` | no | observed (`temp.rec`, 5×) | ModPlayer switch case → handler `0x7eac80` |
+| 98 | `PCMD_SetPreferredRetreatTarget` | no | not observed | live issuers `0x899da7`, `0xb5f93f` |
+| 99 | `PCMD_CheatLastStandSelfInvulnerability` | no | not observed | permission table; SCAR issuer `push 0x63` |
+
+"Corpus" is the six replays in this repository (`recs/*.rec`, `3v3.rec`,
+`temp.rec`), counted over the parser's full `commands` list on 2026-10-26.
+
+#### Opcode 97 `PCMD_ConcessionSuccessful` in the corpus
+
+`temp.rec` (3v3, Victory Point Control under the Elite mod, 16160 ticks) ends by concession. Five of the
+six players issue opcode 97 at ticks 16154–16155. Each command targets the
+sender's own player (receiver kind 0, id `1000 + slot`) and carries custom tag
+41, length 4, payload `u32 1`. Slot 4 issues no opcode 97 although it sends
+other commands until tick 16157. Both teams send it, so the sender set alone
+does not identify the conceding team.
+
+The payload `u32` is the winner, as a 1-based index into the engine's
+PlayerManager list:
+
+1. Issuer `0x41df9a`, once the concede vote has passed (`0x41e0c9`, read as
+   "every eligible ally of the conceder agreed", medium): `0x41e318` picks the
+   first PlayerManager entry that is not the conceder, has player flags
+   `+0x14`/`+0x15` clear and is on a different team (relation 1 from
+   `0x815070`). `0x41e38c` returns its list index plus one
+   (`lea eax,[edi+0x1]` at `0x41e3d9`). The command is sent with
+   `WorldDoCommandPlayer(0x61)` at `0x41e00d`.
+2. Handler `0x7eac80`: `0x7ed330` reads the `u32` from the custom payload
+   (stream over command `+0x40`/`+0x44`) and passes it to
+   `PlayerManager::SetConcessionWinningPlayerSlot` (import `0xf88420`), which
+   stores it at world `+0x1a4`.
+3. The SCAR rules `WinCondition_ConcessionSuccessful*` call
+   `World_SetTeamWin(World_GetPlayerAt(World_ConcessionWinningPlayerSlot()))`.
+   `World_GetPlayerAt` (`0x8d1550`) subtracts one before indexing.
+
+So the winning team of a conceded game can be read from the file: the
+opcode 97 payload names the winning player, and `DATAINFO` gives its team.
+
+Rule: **winner slot = payload − 1**, i.e. the PlayerManager list is in slot
+order, not in `DATAINFO` order. Ground truth: in `temp.rec` the payload is 1,
+which gives slot 0 (Kata VIII, team 1), and the user confirmed that team 1
+won that game. The `DATAINFO` order (5, 3, 4, 2, 1, 0) would have given
+slot 5 on team 0, which is contradicted. This rests on one replay. A conceded
+game won by the other team, or with a different slot layout, would confirm
+it further.
+
+Still open: why slot 4 (on the conceding team 0) sends no opcode 97. The
+mechanism is static (disassembly of the analysed build), not a runtime trace.
+
 ## Receive-side dispatch
 
 There is no single opcode switch. Dispatch splits by receiver kind:

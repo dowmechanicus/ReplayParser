@@ -122,6 +122,60 @@ Tier: supported. The link from `COLS` to the shuffle's random flag is not traced
 in code; it rests on the corpus validation (all fixed-location replays only
 match when the shuffles are skipped).
 
+### Win conditions
+
+After the game name, the `DATABASE` payload holds one `u32` (always 0 in the
+corpus) and then the win-condition list: a `u32` count followed by one `u32`
+ID per active win condition. The writer is the loop at `0x41ae24..0x41ae83`
+in `GameInfo_WriteFOLDINFO` (`0x41ad12`) over `GameInfo+0xd6c`;
+`AddWinCondition` (`0x44f21b`) fills that list from the table that
+`GameSetup_Reset` loads from `Simulation/Scar/WinConditions/*.scar`.
+
+**The ID is the CRC32 (zlib/IEEE) of the win-condition `.scar` file's
+contents.** Tier: supported. Every ID in the corpus and in the user's local
+replays equals the CRC32 of exactly one script, and the 15 scripts checked
+below all have distinct CRCs. The CRC call inside the loader (`0x79f030`) is
+not traced. Because the ID hashes file contents, it depends on the game data
+or mod the replay was recorded with. The same mode has a different ID under
+a mod that ships its own copy of the script.
+
+| ID | Script | Source | Display name |
+| --- | --- | --- | --- |
+| `0x5286c903` | `annihilate.scar` | stock `000_data.sga` | Annihilation |
+| `0xa5d2fc11` | `ffa-solo.scar` | stock `000_data.sga` | Free For All (solo) |
+| `0x05750182` | `ffa-team.scar` | stock `000_data.sga` | Free For All (team) |
+| `0x1576eb00` | `vptickerwin-annihilate.scar` | stock `000_data.sga` | Victory Point Control |
+| `0x69b18aa9` | `annihilate.scar` | Elite `Elite_Data_18_Misc.sga` | Annihilation |
+| `0xc156f468` | `ffa-solo.scar` | Elite | Free For All (solo) |
+| `0x776ca03b` | `ffa-team.scar` | Elite | Free For All (team) |
+| `0xfc03e252` | `vptickerwin-annihilate.scar` | Elite | Victory Point Control |
+| `0xc8438f73` | `{}annil_hero_assault.scar` | Elite | Annihilate - Hero Assault |
+| `0xe034f94e` | `{}annil_mb.scar` | Elite | Massive Battles - Annihilate |
+| `0x1aafd5c8` | `{}hero_assault_vpc.scar` | Elite | VPC - Hero Assault (500 points) |
+| `0x978dd4ce` | `{}vpc_mb.scar` | Elite | Massive Battles - VPC (750 points) |
+| `0xa0499908` | `{}z_devmode.scar` | Elite | [VPC] Sandbox Mode |
+| `0xba079905` | `{}z_monthly.scar` | Elite | [Event] Night Fighting |
+| `0xe51d3657` | `{}z_tabletop.scar` | Elite | Tabletop Mode |
+
+The Elite display names are the strings in the matching `*_local.lua` files.
+The stock `*_local.lua` files hold localisation IDs only, so the stock names
+above are descriptive. The corpus replays from 2017 and 2021 use `0x1576eb00`.
+This repository's `temp.rec` and the user's 2026-10 replays (module checksum
+4156674300, Elite) use `0xfc03e252`. The user confirmed that one of those
+local games (1v1 on Calderis Refinery, 2026-10-26) was Victory Point
+Control. `parse_base` maps the known IDs to these names and reports an
+unlisted ID as `Unknown win condition 0x........`. The JSON `game` object
+has `mode`, the name of the first listed win condition (`None` if the list
+is empty), and `win_conditions`, every stored entry as `{ "id", "name" }` in
+file order. Every replay examined lists exactly one win condition, so a
+longer list is allowed by the format but not observed.
+
+The list says which rules were active, not who won. The result is decided at
+runtime by the win-condition scripts (annihilate: last team with a living
+`hq` entity; VP ticker; FFA ticker; concession) and is not stored in the
+file. The only exception is a concession, whose opcode 97 payload names the
+winning player (see `docs/action-table-audit.md`, "Opcode 97").
+
 ## Player metadata (`DATAINFO`)
 
 The per-player writer is DOW2 `0x41a9c1` (reader `0x41ab06`), called once per

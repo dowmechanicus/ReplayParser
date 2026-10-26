@@ -198,7 +198,7 @@ Each object has the identity fields `slot`, `name`, `relic_id` and `race`, plus 
 
 | field | counts |
 |---|---|
-| `actions` | every decoded command, including opcodes with no engine name such as 97 (counted, not interpreted) |
+| `actions` | every decoded command, including opcodes the parser does not name, such as 97 `PCMD_ConcessionSuccessful` (counted, not interpreted; full name table in docs/action-table-audit.md) |
 | `squads_built` | opcode 3 `CMD_BuildSquad` |
 | `retreats` | opcode 61 `SCMD_Retreat` |
 | `reinforcements` | opcode 49 `SCMD_ReinforceUnit` |
